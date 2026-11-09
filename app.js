@@ -1007,11 +1007,20 @@ function ensureFiveGradeSystem(students) {
   if (!students) return;
   const map9to5 = { 1: 1, 2: 1, 3: 2, 4: 2, 5: 3, 6: 4, 7: 4, 8: 5, 9: 5 };
 
+  // 전체 데이터셋에 9등급제 징후(등급 > 5 또는 gradeSystem === 9 또는 표준편차 보유)가 있는지 판별
+  let isDataset9 = false;
+  for (const subjs of Object.values(students)) {
+    if (subjs && typeof subjs === 'object') {
+      if (Object.values(subjs).some(d => d && (d.grade > 5 || d.gradeSystem === 9 || (d.stddev != null && d.stddev > 0)))) {
+        isDataset9 = true;
+        break;
+      }
+    }
+  }
+  if (!isDataset9) return;
+
   for (const [name, subjs] of Object.entries(students)) {
     if (!subjs || typeof subjs !== 'object') continue;
-    // 이 학생에게 9등급(6~9등급 또는 gradeSystem === 9) 데이터가 존재하는지 확인
-    const has9Grade = Object.values(subjs).some(d => d && (d.grade > 5 || d.gradeSystem === 9));
-    if (!has9Grade) continue;
 
     for (const [key, d] of Object.entries(subjs)) {
       if (!d || d.grade === null || d.grade === undefined) continue;
@@ -1613,13 +1622,15 @@ function clampedEntryPct(d, subjectKey, studentName) {
   return { pct: Math.min(hi, Math.max(lo, info.pct)), precise: info.precise, gs, g, lo, hi };
 }
 
-// 자기 등급제 기준 소수점 등급 (정수부는 기록된 등급으로 고정)
+// 자기 등급제 기준 소수점 등급 (정수부는 기록된 등급으로 고정, 최대 5.00 한도 클램핑)
 function calcDecimalGrade(d, subjectKey, studentName) {
   if (d.isMid || d.grade == null) return null;
   const c = clampedEntryPct(d, subjectKey, studentName);
   if (!c) return null;
   const frac = c.hi > c.lo ? (c.pct - c.lo) / (c.hi - c.lo) : 0;
-  return { value: c.g + Math.min(0.99, Math.max(0, frac)), precise: c.precise };
+  const rawVal = c.g + Math.min(0.99, Math.max(0, frac));
+  const val = Math.min(5.0, Math.max(1.0, rawVal));
+  return { value: val, precise: c.precise };
 }
 
 // 9등급제 환산 소수점 등급 (5등급제 과목 대상)
@@ -1676,9 +1687,6 @@ function buildTable() {
         if (d.grade !== null && d.grade !== undefined) {
           cls = `g${d.grade}`;
           gradeLabel = d.grade + '등급';
-          // 소수점 둘째자리 등급 (백분위 기반)
-          const dec = calcDecimalGrade(d, key, currentStudent);
-          if (dec) gradeLabel = dec.value.toFixed(2) + '등급' + (dec.precise ? '' : '<span style="opacity:.6">(추정)</span>');
         } else {
           cls = d.achieve === 'P' ? 'g-pass' : 'g-career';
           gradeLabel = d.achieve === 'P' ? 'P (이수)' : (d.achieve ? `진로 · 성취도 ${d.achieve}` : '진로선택');
@@ -1897,132 +1905,46 @@ function buildChart() {
   } else {
     // ── [개선 3] 과목별 성적 추이 그래프 ──
     // 같은 계열 안에서는 같은 계열 색상(catInfo.color)으로 통일.
-    // 만약 한 학기에 두 과목 이상 있으면 그 과목들의 평균을 실선(계열 색상)으로 하고,
-    // 각각의 과목은 회색 점, 회색 점선으로 이어지게 처리.
-    const hasMultiSubjectsInAnyTerm = allUsedTerms.some(t => {
-      return subjsInCat.map(s => data[`${s}__${t}`]).filter(d => d && d.grade != null).length >= 2;
+    // 해당 계열의 학기별 평균 실선 1개만 깔끔하게 연결하여 표시 (사회계열도 다른 계열처럼 평균 실선만 단일 표시)
+    const avgPts = [];
+    const avgLabels = [];
+    const avgSubs = [];
+    let hasAvgData = false;
+
+    allUsedTerms.forEach(t => {
+      const termEnts = subjsInCat.map(s => data[`${s}__${t}`]).filter(d => d && d.grade != null);
+      if (termEnts.length > 0) {
+        const avg = parseFloat((termEnts.reduce((sum, d) => sum + d.grade, 0) / termEnts.length).toFixed(2));
+        avgPts.push(avg);
+        avgSubs.push(termEnts.map(d => ({ subject: d.subject, grade: d.grade, prov: nsIsProv(d) })));
+        const subNames = termEnts.map(d => `${d.subject}(${d.grade}등급)`).join(', ');
+        avgLabels.push(`${currentChartCategory} 평균 (${t}: ${avg}등급 [${subNames}])`);
+        hasAvgData = true;
+      } else {
+        avgPts.push(null);
+        avgSubs.push(null);
+        avgLabels.push(null);
+      }
     });
 
-    if (hasMultiSubjectsInAnyTerm) {
-      // 1) 한 학기 2과목 이상 있는 경우: 과목들의 평균을 실선(계열 색상)으로 표시
-      const avgPts = [];
-      const avgLabels = [];
-      const avgSubs = [];
-      let hasAvgData = false;
-
-      allUsedTerms.forEach(t => {
-        const termEnts = subjsInCat.map(s => data[`${s}__${t}`]).filter(d => d && d.grade != null);
-        if (termEnts.length > 0) {
-          const avg = parseFloat((termEnts.reduce((sum, d) => sum + d.grade, 0) / termEnts.length).toFixed(2));
-          avgPts.push(avg);
-          avgSubs.push(termEnts.map(d => ({ subject: d.subject, grade: d.grade, prov: nsIsProv(d) })));
-          const subNames = termEnts.map(d => `${d.subject}(${d.grade}등급)`).join(', ');
-          avgLabels.push(`${currentChartCategory} 평균 (${t}: ${avg}등급 [${subNames}])`);
-          hasAvgData = true;
-        } else {
-          avgPts.push(null);
-          avgSubs.push(null);
-          avgLabels.push(null);
-        }
+    if (hasAvgData) {
+      datasets.push({
+        label: `${currentChartCategory} 평균`,
+        data: avgPts,
+        _labels: avgLabels,
+        _subs: avgSubs,
+        borderColor: catInfo.color,
+        backgroundColor: catInfo.color + '22',
+        borderWidth: 3.5,
+        borderDash: [],
+        pointRadius: 6,
+        pointHoverRadius: 8,
+        pointBackgroundColor: catInfo.color,
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        tension: 0.15,
+        spanGaps: true
       });
-
-      if (hasAvgData) {
-        datasets.push({
-          label: `${currentChartCategory} 평균`,
-          data: avgPts,
-          _labels: avgLabels,
-          _subs: avgSubs,
-          borderColor: catInfo.color,
-          backgroundColor: catInfo.color + '22',
-          borderWidth: 3.5,
-          borderDash: [],
-          pointRadius: 6,
-          pointHoverRadius: 8,
-          pointBackgroundColor: catInfo.color,
-          pointBorderColor: '#fff',
-          pointBorderWidth: 2,
-          tension: 0.15,
-          spanGaps: true,
-          order: 1
-        });
-      }
-
-      // 2) 각각의 과목은 회색 점, 회색 점선으로 이어지게 표시
-      subjsInCat.forEach(subj => {
-        const pts = [];
-        const labels = [];
-        let hasData = false;
-        allUsedTerms.forEach(t => {
-          const ent = data[`${subj}__${t}`];
-          if (ent && ent.grade != null) {
-            pts.push(ent.grade);
-            labels.push(`${subj} (${t}: ${ent.grade}등급${ent.score != null ? ' · ' + ent.score + '점' : ''})`);
-            hasData = true;
-          } else {
-            pts.push(null);
-            labels.push(null);
-          }
-        });
-        if (hasData) {
-          datasets.push({
-            label: subj,
-            data: pts,
-            _labels: labels,
-            borderColor: '#94a3b8',
-            borderDash: [5, 4],
-            borderWidth: 1.8,
-            pointRadius: 4.5,
-            pointHoverRadius: 7,
-            pointBackgroundColor: '#94a3b8',
-            pointBorderColor: '#fff',
-            pointBorderWidth: 1,
-            backgroundColor: 'transparent',
-            tension: 0.15,
-            spanGaps: false,
-            order: 2
-          });
-        }
-      });
-    } else {
-      // 한 학기에 1과목씩만 있는 경우: 학기별 과목 점들을 계열 고유 색상(catInfo.color)의 실선으로 연속 연결
-      const catPts = [];
-      const catLabels = [];
-      const catSubs = [];
-      let hasCatData = false;
-
-      allUsedTerms.forEach(t => {
-        const ent = subjsInCat.map(s => data[`${s}__${t}`]).find(d => d && d.grade != null);
-        if (ent) {
-          catPts.push(ent.grade);
-          catSubs.push([{ subject: ent.subject, grade: ent.grade, prov: nsIsProv(ent) }]);
-          catLabels.push(`${ent.subject} (${t}: ${ent.grade}등급${ent.score != null ? ' · ' + ent.score + '점' : ''})`);
-          hasCatData = true;
-        } else {
-          catPts.push(null);
-          catSubs.push(null);
-          catLabels.push(null);
-        }
-      });
-
-      if (hasCatData) {
-        datasets.push({
-          label: `${currentChartCategory}`,
-          data: catPts,
-          _labels: catLabels,
-          _subs: catSubs,
-          borderColor: catInfo.color,
-          backgroundColor: catInfo.color + '22',
-          borderWidth: 3,
-          borderDash: [],
-          pointRadius: 6,
-          pointHoverRadius: 8,
-          pointBackgroundColor: catInfo.color,
-          pointBorderColor: '#fff',
-          pointBorderWidth: 2,
-          tension: 0.15,
-          spanGaps: true
-        });
-      }
     }
   }
 
@@ -9403,8 +9325,11 @@ function nsPosHtml(xs, term) {
     const where = p.z !== null
       ? (p.z >= 0 ? '평균보다 표준편차의 <b>' + p.z.toFixed(1) + '배</b> 위' : '평균보다 표준편차의 <b>' + Math.abs(p.z).toFixed(1) + '배</b> 아래')
       : (p.diff >= 0 ? '평균보다 <b>' + p.diff.toFixed(1) + '점</b> 높음' : '평균보다 <b>' + Math.abs(p.diff).toFixed(1) + '점</b> 낮음');
+    const gBadge = (p.grade !== null && p.grade !== undefined && !isNaN(p.grade))
+      ? '<span class="grade-badge g' + Math.round(p.grade) + '">' + p.grade + '등급</span>'
+      : (p.achieve ? '<span class="grade-badge g-career" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;font-size:10px;padding:2px 6px">성취도 ' + p.achieve + '</span>' : '<span class="grade-badge g-career" style="font-size:10px;padding:2px 6px">진로</span>');
     return '<div class="ns-pos-row">' +
-      '<div class="ns-pos-nm"><b>' + mkEsc(p.subject) + '</b><span class="grade-badge g' + Math.round(p.grade) + '">' + p.grade + '</span></div>' +
+      '<div class="ns-pos-nm"><b>' + mkEsc(p.subject) + '</b>' + gBadge + '</div>' +
       '<div class="ns-track">' + band +
         '<span class="ns-avg" style="left:' + pc(p.avg) + '%" title="과목평균 ' + p.avg + '"></span>' +
         '<span class="ns-me ' + tone + '" style="left:' + pc(p.score) + '%" title="내 점수 ' + p.score + '"></span></div>' +
@@ -11865,7 +11790,7 @@ motionInit();   // 저장분을 다 불러온 뒤에 감싼다 — 시작할 때
 // ===============================================
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
-    navigator.serviceWorker.register('./sw.js?v=20261109_v7').then(function(reg) {
+    navigator.serviceWorker.register('./sw.js?v=20261109_v8').then(function(reg) {
       console.log('[PWA] ServiceWorker registered with scope:', reg.scope);
       // 새 서비스워커 감지 시 즉시 업데이트 적용
       reg.update();
