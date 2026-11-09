@@ -31,8 +31,8 @@ const HEADER_ALIASES = {
   term:    ['학기'],
   score:   ['원점수','점수','원점수/과목평균'],
   dist:    ['분포비율','비율','성취도별분포비율'],
-  achieve: ['성취도'],
-  total:   ['수강자수','수강자','수강인원','수강자수(명)','성취도(수강자수)']
+  achieve: ['성취도','성취도(수강자수)','성취도/수강자수'],
+  total:   ['수강자수','수강자','수강인원','수강자수(명)']
 };
 const ROLE_LABELS = { '':'-- 역할 선택 --', num:'번호', name:'성명', gradeYr:'학년', term:'학기', subj:'과목', rank:'석차등급', achieve:'성취도(A~E)', score:'원점수', dist:'분포비율', total:'수강자수', skip:'(무시)' };
 
@@ -617,6 +617,7 @@ function buildTermGradeSystemMap() {
 
 function applyParseResult(students, isIlam) {
   students = nsMergeNaesin(students, isIlam, false);
+  ensureFiveGradeSystem(students);
   allStudents = students;
   nsTakeAchOnly(students);
   buildTermGradeSystemMap();
@@ -827,79 +828,62 @@ function parseNEIS(rows, manualCOL) {
     if (COL.term>=0)  { const v=row[COL.term];  if (v!==''&&v!==null&&!isNaN(parseFloat(v))) curTm=parseInt(v); }
 
     const subj = COL.subj>=0 ? String(row[COL.subj]||'').trim() : '';
-    if (!subj) continue;
+    const skipSubjs = ['과목', '과 목', '교과', '교과명', '교과목', '세부과목', '세부과목명', '이수학점 합계', '합계', '비고'];
+    if (!subj || skipSubjs.includes(subj) || subj.includes('이수학점') || subj.includes('합계')) continue;
+    if (!curGY || !curTm) continue;
 
-    // ── [개선 3] NEIS 컬럼별 정밀 파싱 (일반과목 vs 진로과목) ──
-    // 1) 석차등급 추출: AK/AL열(col 36~37) 또는 COL.rank 우선
+    // ── [개선 3] NEIS 컬럼별 정밀 파싱 (전체 과목 및 진로과목 추출) ──
+    // 1) 석차등급 추출: AK/AL열(col 35~37) 또는 COL.rank
     let gradeNum = null;
-    const rankCols = [36, 37];
-    if (COL.rank >= 0 && !rankCols.includes(COL.rank)) rankCols.unshift(COL.rank);
+    const rankCols = [COL.rank, 35, 36, 37].filter(c => c >= 0);
     for (const rc of rankCols) {
       if (rc < row.length) {
-        const v = row[rc];
-        if (v !== '' && v !== null && v !== undefined && !isNaN(parseFloat(v))) {
+        const v = String(row[rc] || '').trim();
+        if (v !== '' && !isNaN(parseFloat(v))) {
           const n = parseFloat(v);
           if (n >= 1 && n <= 9) { gradeNum = n; break; }
         }
       }
     }
 
-    // 2) 성취도 및 분포비율 추출:
-    // - 석차등급 있는 과목: 성취도는 AH~AJ(col 33~35) 또는 COL.achieve
-    // - 석차등급 없는 과목: 성취도는 AD~AE(col 29~30), 분포비율은 AF~AM(col 31~38)
+    // 2) 성취도(A~E, P) 추출: COL.achieve, AD·AE(col 29~30), col 32, AH~AJ(col 33~35) 등 검색
     let achLetter = null;
-    let distArr = null;
-
-    if (gradeNum !== null) {
-      // 일반교과 (석차등급 있음)
-      const achCols = [33, 34, 35];
-      if (COL.achieve >= 0 && !achCols.includes(COL.achieve)) achCols.unshift(COL.achieve);
+    const achCols = [COL.achieve, 29, 30, 32, 33, 34, 35].filter(c => c >= 0);
+    for (const ac of achCols) {
+      if (ac < row.length) {
+        const s = String(row[ac] || '').trim().toUpperCase();
+        const m = s.match(/[A-E]/);
+        if (m) { achLetter = m[0]; break; }
+      }
+    }
+    if (!achLetter) {
+      // P(이수) 교양 과목 확인
       for (const ac of achCols) {
         if (ac < row.length) {
           const s = String(row[ac] || '').trim().toUpperCase();
-          const m = s.match(/[A-E]/);
-          if (m) { achLetter = m[0]; break; }
+          if (s.includes('P')) { achLetter = 'P'; break; }
         }
-      }
-      if (COL.dist >= 0 && COL.dist < row.length) {
-        const dr = String(row[COL.dist] || '').trim();
-        const dm = [...dr.matchAll(/[A-E]\s*\(\s*([\d.]+)\s*\)/g)];
-        if (dm.length >= 2) distArr = dm.map(m => parseFloat(m[1]));
-      }
-    } else {
-      // 진로교과 (석차등급 없음, 성취도만 존재)
-      const carAchCols = [29, 30];
-      if (COL.achieve >= 0 && !carAchCols.includes(COL.achieve)) carAchCols.push(COL.achieve);
-      for (const ac of carAchCols) {
-        if (ac < row.length) {
-          const s = String(row[ac] || '').trim().toUpperCase();
-          const m = s.match(/[A-E]/);
-          if (m) { achLetter = m[0]; break; }
-        }
-      }
-      // 성취도별 분포비율: AF~AM열 (col 31~38)
-      let distText = '';
-      for (let c = 31; c <= 38 && c < row.length; c++) {
-        distText += ' ' + String(row[c] || '');
-      }
-      const dm = [...distText.matchAll(/[A-E]?\s*\(\s*([\d.]+)\s*\)/g)];
-      if (dm.length >= 2) {
-        distArr = dm.map(m => parseFloat(m[1]));
-      } else {
-        const rawNums = [];
-        for (let c = 31; c <= 38 && c < row.length; c++) {
-          const val = parseFloat(row[c]);
-          if (!isNaN(val) && val > 0 && val <= 100) rawNums.push(val);
-        }
-        if (rawNums.length >= 3) distArr = rawNums;
       }
     }
 
-    // 유효한 과목 검사: 석차등급이 있거나, 성취도가 있는 경우 수집
-    if (gradeNum === null && !achLetter) continue;
-    if (!curGY || !curTm) continue;
+    // 3) 성취도별 분포비율(AF~AM열 또는 COL.dist) 추출
+    let distArr = null;
+    let distText = '';
+    if (COL.dist >= 0 && COL.dist < row.length) distText += ' ' + String(row[COL.dist] || '');
+    for (let c = 31; c <= 38 && c < row.length; c++) distText += ' ' + String(row[c] || '');
+    const dm = [...distText.matchAll(/[A-E]?\s*\(\s*([\d.]+)\s*\)/g)];
+    if (dm.length >= 2) {
+      distArr = dm.map(m => parseFloat(m[1]));
+    } else {
+      const rawNums = [];
+      for (let c = 31; c <= 38 && c < row.length; c++) {
+        const val = parseFloat(row[c]);
+        if (!isNaN(val) && val > 0 && val <= 100) rawNums.push(val);
+      }
+      if (rawNums.length >= 3) distArr = rawNums;
+    }
 
-    // 원점수 / 과목평균 / 표준편차
+    // 4) 원점수 / 과목평균 / 표준편차 추출
     let score = null, avg = null, stddev = null;
     if (COL.score >= 0 && COL.score < row.length) {
       const sr = String(row[COL.score] || '').trim();
@@ -910,7 +894,7 @@ function parseNEIS(rows, manualCOL) {
       }
     }
 
-    // 수강자수 (신양식: 별도 컬럼 / 구양식: 성취도(수강자수) 형태)
+    // 5) 수강자수 (신양식: 별도 컬럼 / 구양식: 성취도(수강자수) 형태)
     let total = null;
     if (COL.total >= 0 && COL.total < row.length) {
       const tv = String(row[COL.total] || '').trim();
@@ -919,8 +903,7 @@ function parseNEIS(rows, manualCOL) {
       else if (tv !== '' && !isNaN(parseFloat(tv))) total = Math.round(parseFloat(tv));
     }
     if (total === null) {
-      // 30~35열 주변에서 수강자수 (숫자) 패턴 검색
-      for (const tc of [35, 34, 30, 29]) {
+      for (const tc of [COL.achieve, 32, 35, 34, 30, 29].filter(c => c >= 0)) {
         if (tc < row.length) {
           const tm = String(row[tc] || '').match(/\((\d+)\)/);
           if (tm) { total = parseInt(tm[1], 10); break; }
@@ -930,26 +913,75 @@ function parseNEIS(rows, manualCOL) {
 
     const tl = `${curGY}학년 ${curTm}학기`;
     const key = `${subj}__${tl}`;
-    const isCareer = (gradeNum === null && !!achLetter);
+    const isCareer = (gradeNum === null);
+    const type = (gradeNum !== null) ? '일반' : (achLetter === 'P' ? '교양' : '진로');
     const nsEntry = {
       subject: subj, term: tl, grade: gradeNum, score, avg, stddev,
-      distArr, achieve: achLetter, total, type: isCareer ? '진로' : '일반'
+      distArr, achieve: achLetter, total, type,
+      gradeSystem: (gradeNum !== null && gradeNum > 5) ? 9 : 5
     };
     if (COL.unit >= 0 && COL.unit < row.length) { const u = parseFloat(row[COL.unit]); if (u > 0) nsEntry.unit = u; }
     if (COL.area >= 0 && COL.area < row.length) { const a = String(row[COL.area] || '').trim(); if (a) nsEntry.area = a; }
 
-    if (isCareer) {
-      // 진로선택과목: 성취도 전용 목록에 보관 (Top-N 및 상담 프롬프트 연동)
+    // 학생 메인 성적 맵에 누락 없이 등록
+    if (!students[curName][key]) students[curName][key] = nsEntry;
+
+    // 석차등급이 없는 진로선택과목(A~E)은 별도 성취도 전용 목록에도 동시 보관
+    if (type === '진로') {
       if (!students.__achOnly) Object.defineProperty(students, '__achOnly', { value: {}, enumerable: false });
       (students.__achOnly[curName] || (students.__achOnly[curName] = [])).push(nsEntry);
-      // 학생 메인 맵에도 과목 등록 (단, 석차등급은 null)
-      if (!students[curName][key]) students[curName][key] = nsEntry;
-    } else {
-      // 일반교과: 학생 메인 맵에 등록
-      if (!students[curName][key]) students[curName][key] = nsEntry;
     }
   }
   return students;
+}
+
+/** 9등급제 데이터를 2028 개편 5등급제로 자동 환산 및 정렬 */
+function ensureFiveGradeSystem(students) {
+  if (!students) return;
+  const map9to5 = { 1: 1, 2: 1, 3: 2, 4: 2, 5: 3, 6: 4, 7: 4, 8: 5, 9: 5 };
+
+  for (const [name, subjs] of Object.entries(students)) {
+    if (!subjs || typeof subjs !== 'object') continue;
+    // 이 학생에게 9등급(6~9등급 또는 gradeSystem === 9) 데이터가 존재하는지 확인
+    const has9Grade = Object.values(subjs).some(d => d && (d.grade > 5 || d.gradeSystem === 9));
+    if (!has9Grade) continue;
+
+    for (const [key, d] of Object.entries(subjs)) {
+      if (!d || d.grade === null || d.grade === undefined) continue;
+      // 원본 9등급 보존
+      if (d.origGrade9 === undefined) d.origGrade9 = d.grade;
+
+      let g5 = null;
+      // 1) 원점수/평균/표준편차가 있으면 Z점수 기반 정규분포 상위 백분위로 5등급 산출
+      if (d.score != null && d.avg != null && d.stddev != null && d.stddev > 0) {
+        const z = (d.score - d.avg) / d.stddev;
+        const pct = 1 - normalCDF(z);
+        if (pct <= 0.10) g5 = 1;
+        else if (pct <= 0.34) g5 = 2;
+        else if (pct <= 0.66) g5 = 3;
+        else if (pct <= 0.90) g5 = 4;
+        else g5 = 5;
+      }
+      // 2) 석차와 수강자수가 있으면 중간석차 백분율로 5등급 산출
+      else if (d.rank && d.total) {
+        const midRank = d.rank + ((d.tieCount || 1) - 1) / 2;
+        const pct = midRank / d.total;
+        if (pct <= 0.10) g5 = 1;
+        else if (pct <= 0.34) g5 = 2;
+        else if (pct <= 0.66) g5 = 3;
+        else if (pct <= 0.90) g5 = 4;
+        else g5 = 5;
+      }
+      // 3) 그 외 표준 9등급 ➔ 5등급 변환표 적용 (1·2등급➔1등급, 3·4등급➔2등급, 5등급➔3등급, 6·7등급➔4등급, 8·9등급➔5등급)
+      else {
+        const r = Math.round(d.origGrade9);
+        g5 = map9to5[r] || Math.min(5, Math.max(1, r));
+      }
+
+      d.grade = g5;
+      d.gradeSystem = 5;
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -1243,7 +1275,7 @@ function buildIlamAnalysis() {
 function buildSummary() {
   const data = allStudents[currentStudent] || {}; // MOCK
   const isMidMode = currentSchoolLevel === 'middle';
-  const grades = Object.values(data).filter(d => checkedSubjects.has(d.subject)).map(d => d.grade);
+  const grades = Object.values(data).filter(d => checkedSubjects.has(d.subject) && typeof d.grade === 'number' && !isNaN(d.grade)).map(d => d.grade);
   const nsA = nsAvgInfo(Object.values(data).filter(d => checkedSubjects.has(d.subject))); // NS — 학점 가중
   const avg = nsA.avg === null ? '-' : nsA.avg.toFixed(2);
   const best = grades.length ? Math.min(...grades) : '-';
@@ -1462,11 +1494,18 @@ function buildTable() {
       const key = `${subj}__${t}`;
       const d = data[key];
       if (d) {
-        const cls = `g${d.grade}`;
-        let gradeLabel = d.grade + '등급';
-        // 소수점 둘째자리 등급 (백분위 기반)
-        const dec = calcDecimalGrade(d, key, currentStudent);
-        if (dec) gradeLabel = dec.value.toFixed(2) + '등급' + (dec.precise ? '' : '<span style="opacity:.6">(추정)</span>');
+        let cls = '';
+        let gradeLabel = '';
+        if (d.grade !== null && d.grade !== undefined) {
+          cls = `g${d.grade}`;
+          gradeLabel = d.grade + '등급';
+          // 소수점 둘째자리 등급 (백분위 기반)
+          const dec = calcDecimalGrade(d, key, currentStudent);
+          if (dec) gradeLabel = dec.value.toFixed(2) + '등급' + (dec.precise ? '' : '<span style="opacity:.6">(추정)</span>');
+        } else {
+          cls = d.achieve === 'P' ? 'g-pass' : 'g-career';
+          gradeLabel = d.achieve === 'P' ? 'P (이수)' : (d.achieve ? `성취도 ${d.achieve}` : '진로선택');
+        }
         let extraInfo = '';
         if (d.isIlam && d.rank) {
           extraInfo = `<br><span style="font-size:9px;color:var(--ink-3)">${d.rank}위/${d.total ? d.total+'명' : '-'}</span>`;
@@ -1474,14 +1513,13 @@ function buildTable() {
           // 교과학습발달상황: 확정 성적이므로 "추월 인원" 대신 수강자수, 성취도, Z점수 표기
           const zVal = (d.stddev && d.stddev > 0 && d.score != null && d.avg != null) ? ((d.score - d.avg) / d.stddev).toFixed(2) : null;
           const zDisp = zVal ? ` · Z${zVal > 0 ? '+' + zVal : zVal}` : '';
-          const achDisp = d.achieve ? `(${d.achieve})` : '';
+          const achDisp = (d.grade !== null && d.achieve) ? `(${d.achieve})` : '';
           extraInfo = `<br><span style="font-size:9px;color:var(--ink-3)">${d.total}명${achDisp}${zDisp}</span>`;
         }
         let conv9 = '';
-        if (show9Grade && isFiveGradeEntry(d)) {
-          const dec9 = calcDecimalGrade9Equiv(d, key, currentStudent);
-          const label9 = dec9 ? dec9.value.toFixed(2) + '등급' + (dec9.precise ? '' : '<span style="opacity:.6">(추정)</span>') : (GRADE5_TO_9[d.grade] || '-');
-          conv9 = `<br><span class="conv9-badge">≈9등급제 ${label9}</span>`;
+        if (show9Grade && d.grade !== null && d.grade !== undefined) {
+          const raw9 = d.origGrade9 != null ? `${d.origGrade9}등급` : (isFiveGradeEntry(d) ? (GRADE5_TO_9[d.grade] || '-') : `${d.grade}등급`);
+          conv9 = `<br><span class="conv9-badge">≈9등급제 ${raw9}</span>`;
         }
         html += `<td><span class="grade-badge ${cls}${d.isIlam ? ' prov' : ''}">${gradeLabel}</span>${extraInfo}<br><span style="font-size:10px;color:var(--ink-3)">${d.score !== null ? d.score+'점' : ''}</span>${conv9}</td>`;
       } else {
@@ -2460,7 +2498,7 @@ function initTopNData() {
         avg: d.avg,
         stddev: d.stddev
       });
-    } else if (hasAchieve) {
+    } else if (hasAchieve && String(d.achieve).trim().toUpperCase() !== 'P') {
       list.push({
         id: `topn_${++uid}_${d.term}_${d.subject}`.replace(/\s+/g, '_'),
         subject: d.subject,
@@ -2479,6 +2517,7 @@ function initTopNData() {
   // 성취도 전용 과목 (석차등급이 산출되지 않은 진로선택과목)
   ao.forEach(d => {
     if (!d || !d.subject) return;
+    if (d.achieve && String(d.achieve).trim().toUpperCase() === 'P') return;
     if (checkedSubjects.size > 0 && !checkedSubjects.has(d.subject)) return;
     if (list.some(item => item.subject === d.subject && item.term === d.term)) return;
     const ach = d.achieve ? String(d.achieve).trim().toUpperCase() : 'A';
