@@ -534,13 +534,17 @@ body.dark .quick-nav-btn.active {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 6px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 .nm-subj-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
 }
 .nm-rank-badge {
   display: inline-flex;
@@ -553,6 +557,7 @@ body.dark .quick-nav-btn.active {
   background: var(--paper-2);
   color: var(--ink-2);
   border: 1px solid var(--line);
+  flex-shrink: 0;
 }
 .nm-rank-badge.rank-1 {
   background: #f59e0b;
@@ -570,25 +575,32 @@ body.dark .quick-nav-btn.active {
   border-color: #94a3b8;
 }
 .nm-subj-name {
-  font-size: 14.5px;
+  font-size: 13.5px;
   font-weight: 800;
   color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .nm-term-pill {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--ink-3);
   background: var(--paper-2);
-  padding: 2px 7px;
+  padding: 2px 6px;
   border-radius: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .nm-target-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   background: var(--paper-2);
-  padding: 3px 8px;
+  padding: 3px 7px;
   border-radius: 6px;
   border: 1px solid var(--line-2);
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .nm-arrow {
   color: var(--ink-3);
@@ -945,20 +957,80 @@ body.dark .quick-nav-btn.active {
   flex-wrap: wrap;
   gap: 8px;
 }
+.topn-summary-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-size: 11.5px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.topn-summary-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.topn-summary-title {
+  font-weight: 700;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.topn-summary-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #fff;
+  border: 1px solid var(--line-2);
+  color: var(--ink-2);
+}
+.topn-summary-chip.hl {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+body.dark .topn-summary-bar {
+  background: var(--paper-2);
+  border-color: var(--line-2);
+}
+body.dark .topn-summary-chip {
+  background: var(--paper);
+  border-color: var(--line-2);
+  color: var(--ink);
+}
+body.dark .topn-summary-chip.hl {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.35);
+  color: #60a5fa;
+}
+body.dark .topn-tag {
+  background: var(--paper-2);
+  border-color: var(--line-2);
+}
 .topn-tag {
   background: #fff;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 9px 12px;
+  border-radius: 6px;
+  padding: 6px 9px;
   cursor: pointer;
   transition: all .15s ease;
   position: relative;
   user-select: none;
-  min-width: 135px;
+  min-width: 105px;
+  max-width: 140px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  gap: 2px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
 }
 .topn-tag:hover {
   transform: translateY(-2px);
@@ -966,10 +1038,10 @@ body.dark .quick-nav-btn.active {
   border-color: var(--ink);
 }
 .topn-tag.tag-gen {
-  border-left: 4px solid #10b981;
+  border-left: 3.5px solid #10b981;
 }
 .topn-tag.tag-car {
-  border-left: 4px solid #f59e0b;
+  border-left: 3.5px solid #818cf8;
 }
 .topn-tag.best {
   border: 2px solid #3b82f6;
@@ -977,24 +1049,24 @@ body.dark .quick-nav-btn.active {
 }
 .topn-best-badge {
   position: absolute;
-  top: -8px;
-  right: -6px;
+  top: -7px;
+  right: -5px;
   background: #2563eb;
   color: #fff;
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 800;
-  padding: 1px 6px;
+  padding: 1px 5px;
   border-radius: 10px;
 }
 .topn-tag-header {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
 }
 .topn-tag-type {
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 800;
-  padding: 1px 5px;
+  padding: 1px 4px;
   border-radius: 3px;
   color: #fff;
 }
@@ -1002,10 +1074,10 @@ body.dark .quick-nav-btn.active {
   background: #10b981;
 }
 .topn-tag-type.car {
-  background: #f59e0b;
+  background: #818cf8;
 }
 .topn-tag-title {
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 800;
   color: var(--ink);
   white-space: nowrap;
@@ -1013,17 +1085,17 @@ body.dark .quick-nav-btn.active {
   text-overflow: ellipsis;
 }
 .topn-tag-sem {
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--ink-3);
 }
 .topn-tag-grade {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   color: var(--ink-2);
-  margin-top: 2px;
+  margin-top: 1px;
 }
 .topn-tag-conv {
-  font-size: 10px;
+  font-size: 9.5px;
   color: var(--ink-3);
   font-weight: normal;
 }

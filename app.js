@@ -2352,8 +2352,10 @@ function buildNearMiss() {
     tabWrap.appendChild(btn);
   });
 
-  // 필터링된 항목 생성
+  // 필터링된 항목 생성 (일반선택 2~5등급 과목 + 진로선택과목 전원 포함)
   const items = [];
+  const careerItems = [];
+
   [...checkedSubjects].forEach(subj => {
     for (let i = termOrder.length-1; i >= 0; i--) {
       const term = termOrder[i];
@@ -2361,30 +2363,114 @@ function buildNearMiss() {
       if (currentNMGrade !== '전체' && !term.startsWith(currentNMGrade)) continue;
       const d = data[`${subj}__${term}`];
       if (!d) continue;
-      if (d.grade <= 1) break;
+
       const key = `${subj}__${term}`;
+      const isCar = (d.type === '진로' || d.grade === null);
+
+      if (isCar) {
+        if (d.achieve && d.achieve !== 'P') {
+          careerItems.push({ subj, term, rawEntry: d, isCareer: true, achieve: d.achieve, sortKey: d.achieve === 'A' ? 2 : 1 });
+        }
+        break;
+      }
+
+      if (d.grade <= 1) break;
       const nm = calcGap(d, currentStudent, key);
-      if (nm) items.push({ subj, term, rawEntry: d, ...nm });
+      if (nm) items.push({ subj, term, rawEntry: d, isCareer: false, ...nm });
       break;
     }
   });
   items.sort(nsGapCompare); // NS
 
+  // 일반 과목 뒤에 진로선택과목 연결 (B/C 성취도 향상 도전 과목 우선 배치)
+  careerItems.sort((a, b) => a.sortKey - b.sortKey);
+  const allCards = [...items, ...careerItems];
+
   const wrap = document.getElementById('near-miss-content');
-  if (!items.length) {
+  if (!allCards.length) {
     wrap.innerHTML = '<div style="font-size:12px;color:var(--ink-3);padding:14px 0;text-align:center">해당 학년에 1등급 외 아쉬운 과목이 없거나 데이터가 없습니다.</div>';
     return;
   }
 
   let html = '<div class="nm-grid">';
-  items.forEach((it, idx) => {
+  allCards.forEach((it, idx) => {
     const rank = idx + 1;
-    const barPct = nsGapBar(it);
-    const pa = getPeopleAhead(`${it.subj}__${it.term}`, currentStudent);
     const d = it.rawEntry || data[`${it.subj}__${it.term}`] || {};
     const rankBadgeClass = rank <= 3 ? `rank-${rank}` : '';
     const cardRankClass = rank === 1 ? 'rank-1' : '';
+    const shortTerm = nsShortTerm(it.term);
 
+    // ── [진로선택과목 카드] ──
+    if (it.isCareer) {
+      const isA = it.achieve === 'A';
+      const targetTag = isA
+        ? '<span class="nm-target-tag" style="color:#2563eb;background:#eff6ff;padding:2px 8px;border-radius:4px;border:1px solid #bfdbfe">A (최고 성취)</span>'
+        : '<span class="nm-target-tag" style="color:#d97706;background:#fef3c7;padding:2px 8px;border-radius:4px;border:1px solid #fde68a">성취도 ' + it.achieve + ' ➔ A 목표</span>';
+
+      const diff = (d.score != null && d.avg != null) ? (d.score - d.avg) : null;
+      const diffStr = diff !== null ? (diff >= 0 ? `+${diff.toFixed(1)}점` : `${diff.toFixed(1)}점`) : '-';
+      const diag = isA
+        ? `성취도 A 달성 (과목평균 대비 ${diffStr}) · 우수한 진로 역량 성취`
+        : `성취도 ${it.achieve} (과목평균 대비 ${diffStr}) · 성취도 A 진입을 위한 성적 관리 권장`;
+
+      html += `
+        <div class="nm-card" style="border-left: 4px solid #818cf8;">
+          <div class="nm-card-header">
+            <div class="nm-subj-info">
+              <span class="nm-rank-badge ${rankBadgeClass}">${rank}위</span>
+              <span class="nm-subj-name">${it.subj}</span>
+              <span class="nm-term-pill">${shortTerm}</span>
+              <span style="font-size:10px;font-weight:700;color:#4338ca;background:#eef2ff;padding:1px 6px;border-radius:4px;border:1px solid #c7d2fe;flex-shrink:0">진로선택</span>
+            </div>
+            <div class="nm-target-pill">
+              <span class="grade-badge g-career" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;font-size:11px;font-weight:800;padding:2px 7px;border-radius:4px">${it.achieve}</span>
+              ${!isA ? '<span class="nm-arrow">➔</span>' + targetTag : ''}
+            </div>
+          </div>
+
+          <div class="nm-meter-wrap" title="진로선택과목 성취 수준">
+            <div class="nm-meter-bar">
+              <div class="nm-meter-fill" style="width: ${isA ? 100 : (it.achieve === 'B' ? 65 : 40)}%; background: linear-gradient(90deg, #818cf8, #4f46e5);"></div>
+            </div>
+            <div class="nm-meter-labels">
+              <span>성취도 평가: <b>${isA ? '성취도 A 최고 역량군' : '성취도 ' + it.achieve + ' (A 상향 도전)'}</b></span>
+              <span class="nm-meter-status" style="color:#4f46e5">${isA ? '탁월 역량' : '상향 권장'}</span>
+            </div>
+          </div>
+
+          <div class="nm-stat-banner">
+            <div class="nm-stat-item primary">
+              <span class="nm-stat-k">과목 성취도</span>
+              <span class="nm-stat-v" style="color:#4338ca">${it.achieve}</span>
+            </div>
+            <div class="nm-stat-item">
+              <span class="nm-stat-k">평균 대비 격차</span>
+              <span class="nm-stat-v" style="color:${diff >= 0 ? '#059669' : '#e11d48'}">${diffStr}</span>
+            </div>
+          </div>
+
+          <div class="nm-detail-grid">
+            <div class="nm-detail-cell">
+              <span class="nm-lbl">내 점수 / 과목 평균</span>
+              <span class="nm-val"><b>${d.score != null ? d.score + '점' : '-'}</b> / ${d.avg != null ? d.avg + '점' : '-'}</span>
+            </div>
+            <div class="nm-detail-cell">
+              <span class="nm-lbl">수강자수 / 성취도비율</span>
+              <span class="nm-val">${d.total ? d.total + '명' : '-'} ${d.distArr && d.distArr.length ? `(A:${d.distArr[0]}%)` : ''}</span>
+            </div>
+            <div class="nm-detail-cell full-width">
+              <span class="nm-lbl">진로역량 성취도 평가</span>
+              <span class="nm-val" style="color:#1e293b;font-weight:700">${diag}</span>
+            </div>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // ── [일반선택과목 카드] ──
+    const barPct = nsGapBar(it);
+    const pa = getPeopleAhead(`${it.subj}__${it.term}`, currentStudent);
     const fillPct = barPct !== null ? Math.round(barPct) : 50;
     const inGradePos = Math.max(1, 100 - fillPct);
     const posTag = inGradePos <= 25 ? '최상위권' : (inGradePos <= 50 ? '상위권' : (inGradePos <= 75 ? '중위권' : '경계선'));
@@ -2402,8 +2488,8 @@ function buildNearMiss() {
             <div class="nm-subj-info">
               <span class="nm-rank-badge ${rankBadgeClass}">${rank}위</span>
               <span class="nm-subj-name">${it.subj}</span>
-              <span class="nm-term-pill">${it.term}</span>
-              <span style="font-size:10px;font-weight:700;color:#d97706;background:#fef3c7;padding:1px 6px;border-radius:4px;border:1px solid #fde68a">1차 시험</span>
+              <span class="nm-term-pill">${shortTerm}</span>
+              <span style="font-size:10px;font-weight:700;color:#d97706;background:#fef3c7;padding:1px 6px;border-radius:4px;border:1px solid #fde68a;flex-shrink:0">1차 시험</span>
             </div>
             <div class="nm-target-pill">
               <span class="grade-badge g${it.grade}">${it.grade}등급</span>
@@ -2417,7 +2503,7 @@ function buildNearMiss() {
               <div class="nm-meter-fill" style="width: ${fillPct}%"></div>
             </div>
             <div class="nm-meter-labels">
-              <span>등급 내 위치: <b>상위 ${inGradePos}%</b></span>
+              <span>등급 내 위치: <b>${it.grade}등급 ${posTag}</b></span>
               <span class="nm-meter-status">기말 역전 가시권</span>
             </div>
           </div>
@@ -2464,7 +2550,7 @@ function buildNearMiss() {
         if (z >= 1.28) diagText = `Z점수 ${zStr} (상위 ${pctVal || 10}%) · 5등급제 1등급 수준의 탁월한 학업 역량`;
         else if (z >= 0.8) diagText = `Z점수 ${zStr} (상위 ${pctVal || 20}%) · 표준편차 대비 매우 우수한 성취 (상위권 대학 경쟁력)`;
         else if (z >= 0.4) diagText = `Z점수 ${zStr} · 과목 평균을 확실히 상회하는 안정적 학업 성취`;
-        else if (z >= 0.0) diagText = `과목 평균 이상 유지 (성취도 ${d.achieve || 'B'}등급) · 균형 잡힌 학업 성취`;
+        else if (z >= 0.0) diagText = `과목 평균 이상 유지 (성취도 ${d.achieve || 'B'}) · 균형 잡힌 학업 성취`;
         else diagText = `과목 성취도 ${d.achieve || '-'} · 기본 개념 완성 및 지속적 성취 관리 권장`;
       } else if (pctVal !== null) {
         if (parseFloat(pctVal) <= 10) diagText = `누적 백분위 상위 ${pctVal}% · 최상위권 학업역량 성취`;
@@ -2482,8 +2568,8 @@ function buildNearMiss() {
             <div class="nm-subj-info">
               <span class="nm-rank-badge ${rankBadgeClass}">${rank}위</span>
               <span class="nm-subj-name">${it.subj}</span>
-              <span class="nm-term-pill">${it.term}</span>
-              <span style="font-size:10px;font-weight:700;color:#059669;background:#ecfdf5;padding:1px 6px;border-radius:4px;border:1px solid #a7f3d0">생기부 확정</span>
+              <span class="nm-term-pill">${shortTerm}</span>
+              <span style="font-size:10px;font-weight:700;color:#059669;background:#ecfdf5;padding:1px 6px;border-radius:4px;border:1px solid #a7f3d0;flex-shrink:0">생기부 확정</span>
             </div>
             <div class="nm-target-pill">
               <span class="grade-badge g${it.grade}">${it.grade}등급</span>
@@ -2496,7 +2582,7 @@ function buildNearMiss() {
               <div class="nm-meter-fill" style="width: ${fillPct}%; background: linear-gradient(90deg, #3b82f6, #1d4ed8);"></div>
             </div>
             <div class="nm-meter-labels">
-              <span>등급 내 상대위치: <b>${it.grade}등급 ${posTag} (상위 ${inGradePos}%)</b></span>
+              <span>등급 내 상대위치: <b>${it.grade}등급 ${posTag}</b></span>
               <span class="nm-meter-status" style="color:#2563eb">${statusBadge}</span>
             </div>
           </div>
@@ -2711,6 +2797,46 @@ window.toggleTopNSub = function(id, isReflected) {
   renderTopNUI();
 };
 
+function makeTopNSummaryHtml(subs, label) {
+  if (!subs || !subs.length) return '';
+  const termCounts = { '1학년': 0, '2학년': 0, '3학년': 0 };
+  const catCounts = {};
+  subs.forEach(d => {
+    const m = (d.term || '').match(/^(\d)학년/);
+    const gKey = m ? m[1] + '학년' : '1학년';
+    if (termCounts[gKey] !== undefined) termCounts[gKey]++;
+    else termCounts[gKey] = (termCounts[gKey] || 0) + 1;
+
+    const cat = classifySubject(d.subject);
+    catCounts[cat] = (catCounts[cat] || 0) + 1;
+  });
+
+  const termBadges = Object.keys(termCounts)
+    .filter(t => termCounts[t] > 0)
+    .map(t => `<span class="topn-summary-chip hl">${t} <b>${termCounts[t]}개</b></span>`)
+    .join('');
+
+  const catBadges = Object.keys(catCounts)
+    .filter(c => catCounts[c] > 0)
+    .sort((a, b) => catCounts[b] - catCounts[a])
+    .map(c => `<span class="topn-summary-chip">${c} <b>${catCounts[c]}개</b></span>`)
+    .join('');
+
+  return `
+    <div class="topn-summary-bar">
+      <div class="topn-summary-group">
+        <span class="topn-summary-title">📌 ${label} 학년별:</span>
+        ${termBadges || '<span style="color:var(--ink-3);font-size:11px">없음</span>'}
+      </div>
+      <div style="width:1px;height:12px;background:var(--line);margin:0 4px"></div>
+      <div class="topn-summary-group">
+        <span class="topn-summary-title">📚 계열별:</span>
+        ${catBadges || '<span style="color:var(--ink-3);font-size:11px">없음</span>'}
+      </div>
+    </div>
+  `;
+}
+
 function renderTopNUI() {
   const convMap = getConvMap();
   const card = document.getElementById('topn-card');
@@ -2777,7 +2903,7 @@ function renderTopNUI() {
     if (!reflectedSubs.length) {
       refContainer.innerHTML = '<div style="font-size:12px;color:var(--ink-3);text-align:center;width:100%;padding:14px 0">반영된 과목이 없습니다. 아래 미반영 과목에서 카드를 클릭하거나 [최적 조합 자동 반영]을 누르세요.</div>';
     } else {
-      let html = '';
+      let html = makeTopNSummaryHtml(reflectedSubs, '반영');
       reflectedSubs.forEach(d => {
         const typeClass = d.type === '일반' ? 'tag-gen' : 'tag-car';
         const typeBadge = d.type === '일반' ? 'gen' : 'car';
@@ -2814,7 +2940,7 @@ function renderTopNUI() {
         groups[gKey].push(d);
       });
 
-      let html = '';
+      let html = makeTopNSummaryHtml(unreflectedSubs, '미반영');
       Object.keys(groups).forEach(gKey => {
         const list = groups[gKey];
         if (!list || !list.length) return;
@@ -3983,7 +4109,11 @@ function resetAll(silent) {
   }
   mkStoreClear(true);
   uiRefresh();
-  if (!silent) showToast('모든 데이터와 저장분을 초기화했습니다.');
+  if (!silent) {
+    try { localStorage.removeItem(MK_STORE_KEY); } catch (e) {}
+    try { sessionStorage.clear(); } catch (e) {}
+    window.location.reload();
+  }
 }
 
 function showToast(m) { const t = document.getElementById('toast'); t.textContent = m; t.style.opacity = '1'; setTimeout(() => t.style.opacity = '0', 2800); }
@@ -8492,8 +8622,10 @@ function mkStoreClear(silent) {
 
 function mkStoreClearAll() {
   if (!confirm('브라우저에 저장된 모든 성적 데이터를 완전히 삭제할까요?')) return;
-  mkStoreClear(false);
-  resetAll(true);
+  mkStoreClear(true);
+  try { localStorage.removeItem(MK_STORE_KEY); } catch (e) {}
+  try { sessionStorage.clear(); } catch (e) {}
+  window.location.reload();
 }
 
 // ═══════════════════════════════════════════════
@@ -8993,7 +9125,8 @@ function mkStoreTouch() {
           subject: d.subject, grade: d.grade, unit: d.unit || null,
           score: d.score, avg: d.avg, sd: sd,
           diff: r2(d.score - d.avg),
-          z: sd ? r2((d.score - d.avg) / sd) : null
+          z: sd ? r2((d.score - d.avg) / sd) : null,
+          achieve: d.achieve || null
         };
       });
   }
@@ -9327,7 +9460,7 @@ function nsPosHtml(xs, term) {
       : (p.diff >= 0 ? '평균보다 <b>' + p.diff.toFixed(1) + '점</b> 높음' : '평균보다 <b>' + Math.abs(p.diff).toFixed(1) + '점</b> 낮음');
     const gBadge = (p.grade !== null && p.grade !== undefined && !isNaN(p.grade))
       ? '<span class="grade-badge g' + Math.round(p.grade) + '">' + p.grade + '등급</span>'
-      : (p.achieve ? '<span class="grade-badge g-career" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;font-size:10px;padding:2px 6px">성취도 ' + p.achieve + '</span>' : '<span class="grade-badge g-career" style="font-size:10px;padding:2px 6px">진로</span>');
+      : (p.achieve ? '<span class="grade-badge g-career" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;font-size:11px;font-weight:800;padding:2px 7px;border-radius:4px">' + p.achieve + '</span>' : '<span class="grade-badge g-career" style="font-size:10px;padding:2px 6px">진로</span>');
     return '<div class="ns-pos-row">' +
       '<div class="ns-pos-nm"><b>' + mkEsc(p.subject) + '</b>' + gBadge + '</div>' +
       '<div class="ns-track">' + band +
@@ -11790,7 +11923,7 @@ motionInit();   // 저장분을 다 불러온 뒤에 감싼다 — 시작할 때
 // ===============================================
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
-    navigator.serviceWorker.register('./sw.js?v=20261109_v8').then(function(reg) {
+    navigator.serviceWorker.register('./sw.js?v=20261109_v9').then(function(reg) {
       console.log('[PWA] ServiceWorker registered with scope:', reg.scope);
       // 새 서비스워커 감지 시 즉시 업데이트 적용
       reg.update();
