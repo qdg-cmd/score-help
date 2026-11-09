@@ -7,7 +7,7 @@ let checkedSubjects = new Set();
 let trendChart = null;
 let gradeSystemMax = 5; // 2028 개편 5등급제 고정
 let currentFileType = 'neis'; // 'neis' | 'ilam'
-const currentSchoolLevel = 'high'; // 'high' | 'middle'
+let currentSchoolLevel = 'high'; // 'high' | 'middle'
 let ilamData = null; // 전과목 성적 일람표 원본 데이터 (학생별 과목별 석차/수강자수)
 let show9Grade = false; // 5등급→9등급 환산 표시 토글
 
@@ -983,11 +983,18 @@ function onStudentChange() {
   const grid = document.getElementById('subj-grid');
   grid.innerHTML = '';
 
-  // Collect unique subjects with term order
+  // Collect unique subjects with term order (일반교과 + 진로선택 성취도 전용 과목)
   const subjMap = {}; // subject -> [terms]
   Object.values(data).forEach(d => {
     if (!subjMap[d.subject]) subjMap[d.subject] = [];
     if (!subjMap[d.subject].includes(d.term)) subjMap[d.subject].push(d.term);
+  });
+  const ao = (typeof nsAchOnly !== 'undefined' && nsAchOnly && nsAchOnly[name]) || [];
+  ao.forEach(d => {
+    if (d && d.subject) {
+      if (!subjMap[d.subject]) subjMap[d.subject] = [];
+      if (d.term && !subjMap[d.subject].includes(d.term)) subjMap[d.subject].push(d.term);
+    }
   });
 
   Object.keys(subjMap).forEach(subj => {
@@ -1595,58 +1602,129 @@ function buildChart() {
     // NS — 교과별 평균 선 (전체과목 탭은 그대로 유지)
     nsTrendCatLines(data, subjsInCat, allUsedTerms).forEach(l => datasets.push(nsTrendDataset(l, true)));
   } else {
-    // ── [개선 3] 각 계열, 예체능, 제2외국어/기타: 개별 과목선 + 계열 평균 점선 ──
-    subjsInCat.forEach((subj, sIdx) => {
-      const color = SUBJ_PALETTE[sIdx % SUBJ_PALETTE.length];
-      const pts = [];
-      const labels = [];
-      let hasData = false;
-      allUsedTerms.forEach(t => {
-        const ent = data[`${subj}__${t}`];
-        if (ent && ent.grade != null) {
-          pts.push(ent.grade);
-          labels.push(`${subj} (${t}: ${ent.grade}등급${ent.score != null ? ' · ' + ent.score + '점' : ''})`);
-          hasData = true;
-        } else {
-          pts.push(null);
-          labels.push(null);
-        }
-      });
-      if (hasData) {
-        datasets.push({
-          label: subj,
-          data: pts,
-          _labels: labels,
-          borderColor: color,
-          backgroundColor: color + '22',
-          borderWidth: 2.5,
-          pointRadius: 5,
-          pointHoverRadius: 8,
-          pointBackgroundColor: color,
-          pointBorderColor: '#fff',
-          pointBorderWidth: 1.5,
-          tension: 0.15,
-          spanGaps: false
-        });
-      }
+    // ── [개선 3] 과목별 성적 추이 그래프 ──
+    // 같은 계열 안에서는 같은 계열 색상(catInfo.color)으로 통일.
+    // 만약 한 학기에 두 과목 이상 있으면 그 과목들의 평균을 실선(계열 색상)으로 하고,
+    // 각각의 과목은 회색 점, 회색 점선으로 이어지게 처리.
+    const hasMultiSubjectsInAnyTerm = allUsedTerms.some(t => {
+      return subjsInCat.map(s => data[`${s}__${t}`]).filter(d => d && d.grade != null).length >= 2;
     });
 
-    // 보조 기준: 계열 전체 평균선 (점선)
-    const catLines = nsTrendCatLines(data, subjsInCat, allUsedTerms);
-    if (catLines.length > 0 && subjsInCat.length > 1) {
-      const cl = catLines[0];
-      datasets.push({
-        label: `[${currentChartCategory} 평균]`,
-        data: cl.pts,
-        borderColor: '#94a3b8',
-        backgroundColor: 'transparent',
-        borderWidth: 2,
-        borderDash: [5, 4],
-        pointRadius: 4,
-        pointHoverRadius: 6,
-        pointBackgroundColor: '#94a3b8',
-        tension: 0.15,
-        spanGaps: true
+    if (hasMultiSubjectsInAnyTerm) {
+      // 1) 한 학기 2과목 이상 있는 경우: 과목들의 평균을 실선(계열 색상)으로 표시
+      const avgPts = [];
+      const avgLabels = [];
+      const avgSubs = [];
+      let hasAvgData = false;
+
+      allUsedTerms.forEach(t => {
+        const termEnts = subjsInCat.map(s => data[`${s}__${t}`]).filter(d => d && d.grade != null);
+        if (termEnts.length > 0) {
+          const avg = parseFloat((termEnts.reduce((sum, d) => sum + d.grade, 0) / termEnts.length).toFixed(2));
+          avgPts.push(avg);
+          avgSubs.push(termEnts.map(d => ({ subject: d.subject, grade: d.grade, prov: nsIsProv(d) })));
+          const subNames = termEnts.map(d => `${d.subject}(${d.grade}등급)`).join(', ');
+          avgLabels.push(`${currentChartCategory} 평균 (${t}: ${avg}등급 [${subNames}])`);
+          hasAvgData = true;
+        } else {
+          avgPts.push(null);
+          avgSubs.push(null);
+          avgLabels.push(null);
+        }
+      });
+
+      if (hasAvgData) {
+        datasets.push({
+          label: `${currentChartCategory} 평균`,
+          data: avgPts,
+          _labels: avgLabels,
+          _subs: avgSubs,
+          borderColor: catInfo.color,
+          backgroundColor: catInfo.color + '22',
+          borderWidth: 3.5,
+          borderDash: [],
+          pointRadius: 6,
+          pointHoverRadius: 8,
+          pointBackgroundColor: catInfo.color,
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          tension: 0.15,
+          spanGaps: true,
+          order: 1
+        });
+      }
+
+      // 2) 각각의 과목은 회색 점, 회색 점선으로 이어지게 표시
+      subjsInCat.forEach(subj => {
+        const pts = [];
+        const labels = [];
+        let hasData = false;
+        allUsedTerms.forEach(t => {
+          const ent = data[`${subj}__${t}`];
+          if (ent && ent.grade != null) {
+            pts.push(ent.grade);
+            labels.push(`${subj} (${t}: ${ent.grade}등급${ent.score != null ? ' · ' + ent.score + '점' : ''})`);
+            hasData = true;
+          } else {
+            pts.push(null);
+            labels.push(null);
+          }
+        });
+        if (hasData) {
+          datasets.push({
+            label: subj,
+            data: pts,
+            _labels: labels,
+            borderColor: '#94a3b8',
+            borderDash: [5, 4],
+            borderWidth: 1.8,
+            pointRadius: 4.5,
+            pointHoverRadius: 7,
+            pointBackgroundColor: '#94a3b8',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 1,
+            backgroundColor: 'transparent',
+            tension: 0.15,
+            spanGaps: false,
+            order: 2
+          });
+        }
+      });
+    } else {
+      // 한 학기에 1과목씩만 있는 경우: 같은 계열 색상(catInfo.color)의 실선으로 연결
+      subjsInCat.forEach(subj => {
+        const pts = [];
+        const labels = [];
+        let hasData = false;
+        allUsedTerms.forEach(t => {
+          const ent = data[`${subj}__${t}`];
+          if (ent && ent.grade != null) {
+            pts.push(ent.grade);
+            labels.push(`${subj} (${t}: ${ent.grade}등급${ent.score != null ? ' · ' + ent.score + '점' : ''})`);
+            hasData = true;
+          } else {
+            pts.push(null);
+            labels.push(null);
+          }
+        });
+        if (hasData) {
+          datasets.push({
+            label: subj,
+            data: pts,
+            _labels: labels,
+            borderColor: catInfo.color,
+            borderDash: [],
+            borderWidth: 2.8,
+            pointRadius: 5,
+            pointHoverRadius: 8,
+            pointBackgroundColor: catInfo.color,
+            pointBorderColor: '#fff',
+            pointBorderWidth: 1.5,
+            backgroundColor: catInfo.color + '18',
+            tension: 0.15,
+            spanGaps: false
+          });
+        }
       });
     }
   }
@@ -2157,37 +2235,71 @@ function buildNearMiss() {
 let topNData = [];
 let reflectedSubs = [];
 let unreflectedSubs = [];
+let topNTargetGen = 10;
+let topNTargetCar = 2;
+
+function onTopNCountChange() {
+  const genEl = document.getElementById('topGenNum');
+  const carEl = document.getElementById('topCarNum');
+  const totEl = document.getElementById('topTotal');
+  if (genEl) topNTargetGen = Math.max(0, parseInt(genEl.value, 10) || 0);
+  if (carEl) topNTargetCar = Math.max(0, parseInt(carEl.value, 10) || 0);
+  if (totEl) totEl.value = topNTargetGen + topNTargetCar;
+  autoExtractTopN();
+}
+
+function onTopNTotalChange() {
+  const totEl = document.getElementById('topTotal');
+  const genEl = document.getElementById('topGenNum');
+  const carEl = document.getElementById('topCarNum');
+  const newTot = Math.max(0, parseInt(totEl ? totEl.value : 12, 10) || 0);
+  if (newTot >= topNTargetCar) {
+    topNTargetGen = newTot - topNTargetCar;
+  } else {
+    topNTargetGen = newTot;
+    topNTargetCar = 0;
+  }
+  if (genEl) genEl.value = topNTargetGen;
+  if (carEl) carEl.value = topNTargetCar;
+  autoExtractTopN();
+}
 
 function initTopNData() {
-  const data = allStudents[currentStudent] || {};
-  const ao = (nsAchOnly && nsAchOnly[currentStudent]) || [];
+  const data = (allStudents && allStudents[currentStudent]) || {};
+  const ao = (typeof nsAchOnly !== 'undefined' && nsAchOnly && nsAchOnly[currentStudent]) || [];
   const list = [];
   let uid = 0;
 
-  // 1. 일반선택 / 석차등급 과목
+  // 일반교과 vs 진로교과 판정 원칙:
+  // "등급이 있으면 일반교과, 등급이 없고 성취도만 있으면 진로교과"
   Object.values(data).forEach(d => {
-    if (!checkedSubjects.has(d.subject)) return;
-    if (d.grade != null && d.grade >= 1 && d.grade <= 5) {
+    if (!d || !d.subject) return;
+    if (checkedSubjects.size > 0 && !checkedSubjects.has(d.subject)) return;
+
+    const hasGrade = (d.grade != null && !isNaN(d.grade) && Number(d.grade) >= 1 && Number(d.grade) <= 9);
+    const hasAchieve = !!(d.achieve && String(d.achieve).trim());
+
+    if (hasGrade) {
       list.push({
         id: `topn_${++uid}_${d.term}_${d.subject}`.replace(/\s+/g, '_'),
         subject: d.subject,
         term: d.term,
         type: '일반',
-        grade: d.grade,
+        grade: Number(d.grade),
         achieve: d.achieve || null,
         unit: d.unit || 1,
         score: d.score,
         avg: d.avg,
         stddev: d.stddev
       });
-    } else if (d.achieve) {
+    } else if (hasAchieve) {
       list.push({
         id: `topn_${++uid}_${d.term}_${d.subject}`.replace(/\s+/g, '_'),
         subject: d.subject,
         term: d.term,
         type: '진로',
         grade: null,
-        achieve: d.achieve,
+        achieve: String(d.achieve).trim().toUpperCase(),
         unit: d.unit || 1,
         score: d.score,
         avg: d.avg,
@@ -2196,10 +2308,12 @@ function initTopNData() {
     }
   });
 
-  // 2. 성취도 전용 (진로선택과목)
+  // 성취도 전용 과목 (석차등급이 산출되지 않은 진로선택과목)
   ao.forEach(d => {
+    if (!d || !d.subject) return;
+    if (checkedSubjects.size > 0 && !checkedSubjects.has(d.subject)) return;
     if (list.some(item => item.subject === d.subject && item.term === d.term)) return;
-    const ach = d.achieve || 'A';
+    const ach = d.achieve ? String(d.achieve).trim().toUpperCase() : 'A';
     list.push({
       id: `topn_${++uid}_${d.term}_${d.subject}`.replace(/\s+/g, '_'),
       subject: d.subject,
@@ -2233,7 +2347,7 @@ function getConvMap() {
 }
 
 function getEffectiveGrade(d, convMap) {
-  if (d.type === '일반' && d.grade) return d.grade;
+  if (d.type === '일반' && d.grade != null) return d.grade;
   if (d.type === '진로' && d.achieve) return convMap[d.achieve] || 5;
   return 5;
 }
@@ -2247,8 +2361,11 @@ function resetTopNUI() {
 function autoExtractTopN() {
   const genEl = document.getElementById('topGenNum');
   const carEl = document.getElementById('topCarNum');
-  const genLimit = genEl ? (parseInt(genEl.value, 10) || 0) : 10;
-  const carLimit = carEl ? (parseInt(carEl.value, 10) || 0) : 2;
+  if (genEl && document.activeElement === genEl) topNTargetGen = Math.max(0, parseInt(genEl.value, 10) || 0);
+  if (carEl && document.activeElement === carEl) topNTargetCar = Math.max(0, parseInt(carEl.value, 10) || 0);
+
+  const genLimit = topNTargetGen;
+  const carLimit = topNTargetCar;
   const convMap = getConvMap();
 
   const sorted = [...topNData].sort((a, b) => getEffectiveGrade(a, convMap) - getEffectiveGrade(b, convMap));
@@ -2298,11 +2415,17 @@ function renderTopNUI() {
   const totalCount = genCount + carCount;
 
   const totalInput = document.getElementById('topTotal');
-  if (totalInput) totalInput.value = totalCount;
+  if (totalInput && document.activeElement !== totalInput) {
+    totalInput.value = topNTargetGen + topNTargetCar;
+  }
   const genInput = document.getElementById('topGenNum');
-  if (genInput) genInput.value = genCount;
+  if (genInput && document.activeElement !== genInput) {
+    genInput.value = topNTargetGen;
+  }
   const carInput = document.getElementById('topCarNum');
-  if (carInput) carInput.value = carCount;
+  if (carInput && document.activeElement !== carInput) {
+    carInput.value = topNTargetCar;
+  }
 
   const refCountEl = document.getElementById('topNReflectedCount');
   if (refCountEl) refCountEl.textContent = totalCount;
@@ -2330,7 +2453,16 @@ function renderTopNUI() {
   }
   const avgSub = document.getElementById('topNAvgSub');
   if (avgSub) {
-    avgSub.innerHTML = `반영 과목 총 <b>${totalCount}개</b> (일반선택 ${genCount}개 + 진로선택 ${carCount}개) · 이수단위 가중평균: <b>${wAvg !== '-' ? wAvg + '등급' : '-'}</b>`;
+    const availGen = topNData.filter(d => d.type === '일반').length;
+    const availCar = topNData.filter(d => d.type === '진로').length;
+    let subHtml = `반영 과목 총 <b>${totalCount}개</b> (설정: 일반선택 ${topNTargetGen}개 + 진로선택 ${topNTargetCar}개 / 실제반영: 일반 ${genCount}개 + 진로 ${carCount}개) · 가중평균: <b>${wAvg !== '-' ? wAvg + '등급' : '-'}</b>`;
+    if (carCount < topNTargetCar) {
+      subHtml += `<br><span style="color:#e11d48;font-size:11px">※ 학생의 진로선택과목(성취도만 있는 과목)이 총 ${availCar}개여서 ${carCount}개만 반영되었습니다.</span>`;
+    }
+    if (genCount < topNTargetGen) {
+      subHtml += `<br><span style="color:#e11d48;font-size:11px">※ 학생의 일반선택과목(석차등급이 있는 과목)이 총 ${availGen}개여서 ${genCount}개만 반영되었습니다.</span>`;
+    }
+    avgSub.innerHTML = subHtml;
   }
 
   // 1. 반영된 과목 컨테이너
@@ -3481,33 +3613,42 @@ function scrollToPrompt() {
 }
 
 function resetAll(silent) {
-  if (!silent && !confirm('모든 데이터를 초기화할까요?')) return;
+  if (!silent && !confirm('모든 성적 데이터와 브라우저 저장분을 초기화할까요?')) return;
   allStudents = {}; currentStudent = null; checkedSubjects.clear(); currentNMGrade = '전체';
   topNData = []; reflectedSubs = []; unreflectedSubs = [];
   ilamData = null; termGradeSystemMap = {};
   show9Grade = false;
   const c9t = document.getElementById('conv9-toggle');
   if (c9t) { c9t.classList.remove('active'); document.getElementById('conv9-toggle-txt').textContent = '9등급제로 환산해보기'; document.getElementById('conv9-note').style.display = 'none'; }
-  document.getElementById('file-input').value = '';
+  const finp = document.getElementById('file-input'); if (finp) finp.value = '';
   const uz = document.getElementById('upload-zone');
-  uz.classList.remove('upload-done');
-  document.getElementById('upload-icon').innerHTML = ic('upload', 26); // MOCK
-  document.getElementById('upload-title').textContent = currentFileType === 'ilam' ? '전과목 성적 일람표 파일을 업로드하세요' : 'NEIS 교과학습발달상황 파일을 업로드하세요';
-  document.getElementById('upload-hint').textContent = '클릭하거나 파일을 여기에 끌어다 놓으세요 · .xlsx .xls .xlsm .xlsb .ods 등';
-  document.getElementById('file-info').style.display = 'none';
-  document.getElementById('stu-sel').innerHTML = '<option value="">-- 파일을 먼저 업로드하세요 --</option>';
-  document.getElementById('stu-badge').style.display = 'none';
-  document.getElementById('stu-info').style.display = 'none';
-  document.getElementById('subj-grid').innerHTML = '<div style="font-size:11px;color:var(--ink-3);padding:8px">학생을 먼저 선택해주세요.</div>';
-  document.getElementById('career-inp').value = '';
-  document.getElementById('memo-inp').value = '';
-  document.getElementById('empty-state').style.display = 'flex';
-  document.getElementById('result-area').style.display = 'none';
-  ['s1','s2','s3'].forEach(id => document.getElementById(id).classList.add('collapsed'));
+  if (uz) {
+    uz.classList.remove('upload-done');
+    const uic = document.getElementById('upload-icon'); if (uic) uic.innerHTML = ic('upload', 26);
+    const ut = document.getElementById('upload-title'); if (ut) ut.textContent = currentFileType === 'ilam' ? '전과목 성적 일람표 파일을 업로드하세요' : 'NEIS 교과학습발달상황 파일을 업로드하세요';
+    const uh = document.getElementById('upload-hint'); if (uh) uh.textContent = '클릭하거나 파일을 여기에 끌어다 놓으세요 · .xlsx .xls .xlsm .xlsb .ods 등';
+  }
+  const fi = document.getElementById('file-info'); if (fi) fi.style.display = 'none';
+  const sel = document.getElementById('stu-sel'); if (sel) sel.innerHTML = '<option value="">-- 파일을 먼저 업로드하세요 --</option>';
+  const sbg = document.getElementById('stu-badge'); if (sbg) sbg.style.display = 'none';
+  const sinfo = document.getElementById('stu-info'); if (sinfo) sinfo.style.display = 'none';
+  const sgrid = document.getElementById('subj-grid'); if (sgrid) sgrid.innerHTML = '<div style="font-size:11px;color:var(--ink-3);padding:8px">학생을 먼저 선택해주세요.</div>';
+  const cinp = document.getElementById('career-inp'); if (cinp) cinp.value = '';
+  const minp = document.getElementById('memo-inp'); if (minp) minp.value = '';
+  const es = document.getElementById('empty-state'); if (es) es.style.display = 'flex';
+  const ra = document.getElementById('result-area'); if (ra) ra.style.display = 'none';
+  ['s1','s2','s3'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('collapsed'); });
   if (trendChart) { trendChart.destroy(); trendChart = null; }
-  document.getElementById('batch-count').textContent = '0명';
-  mkResetAll(); uiRefresh(); // MOCK
-  showToast('초기화했습니다.');
+  const bc = document.getElementById('batch-count'); if (bc) bc.textContent = '0명';
+  mkResetQuiet = true;
+  try {
+    mkResetAll();
+  } finally {
+    mkResetQuiet = false;
+  }
+  mkStoreClear(true);
+  uiRefresh();
+  if (!silent) showToast('모든 데이터와 저장분을 초기화했습니다.');
 }
 
 function showToast(m) { const t = document.getElementById('toast'); t.textContent = m; t.style.opacity = '1'; setTimeout(() => t.style.opacity = '0', 2800); }
@@ -6668,7 +6809,7 @@ function mkToday() {
   return d.getFullYear() + '. ' + (d.getMonth() + 1) + '. ' + d.getDate() + '.';
 }
 
-/** 초기화 — 화면을 비운다. 저장분을 지울지는 따로 묻는다. */
+/** 초기화 — 화면과 모의고사 상태를 비운다. */
 function mkResetAll() {
   mockStudents = {};
   mockDashKey = null;
@@ -6683,12 +6824,8 @@ function mkResetAll() {
   mkUpdateTabBadges();
   switchResultTab('naesin');
 
-  // 화면만 비우면 다음에 열 때 저장분이 되살아나 혼란스럽다 → 여기서 물어본다
-  const info = mkStoreInfo();
-  if (info.ok && !mkResetQuiet) {   // 저장분 골라 지우기(mock-store.js)가 화면을 다시 짤 때는 묻지 않는다
-    if (confirm('브라우저에 저장된 성적도 함께 지울까요?\n\n  확인 — 저장분까지 삭제 (다음에 열어도 빈 화면)\n  취소 — 저장분은 남김 (다음에 열면 다시 나옴)')) {
-      mkStoreClear(true);
-    }
+  if (!mkResetQuiet) {
+    mkStoreClear(true);
   }
   mkStoreRender();
 }
@@ -7881,70 +8018,117 @@ function mkStoreInfo() {
 // ═══════════════════════════════════════════════
 function mkStoreLoad(announce) {
   const info = mkStoreInfo();
-  if (!info.ok) return false;
+  if (!info.ok) {
+    if (announce) showToast('불러올 유효한 저장 데이터가 없습니다.');
+    return false;
+  }
 
   let p;
   try { p = JSON.parse(localStorage.getItem(MK_STORE_KEY)); }
-  catch (e) { return false; }
+  catch (e) {
+    if (announce) showToast('저장 데이터 형식이 손상되었습니다.');
+    return false;
+  }
+  if (!p || typeof p !== 'object') return false;
 
+  let loadedNaesin = false;
+  let loadedMock = false;
+
+  // 1. 모의고사 복원
   try {
-    // ── 모의고사 ──
-    if (p.mock && p.mock.students) {
+    if (p.mock && p.mock.students && typeof p.mock.students === 'object') {
       mockStudents = p.mock.students;
-      // 예전에 저장한 고1·2 회차도 탐구 이름을 통합사회·통합과학으로 맞춘다
-      Object.values(mockStudents).forEach(s => Object.values(s.exams || {}).forEach(ME.applyCurriculum));
-      if (Array.isArray(p.mock.weight) && p.mock.weight.length) mockWeight = new Set(p.mock.weight);
+      if (typeof ME !== 'undefined' && typeof ME.applyCurriculum === 'function') {
+        Object.values(mockStudents).forEach(s => {
+          if (s && s.exams) Object.values(s.exams).forEach(ME.applyCurriculum);
+        });
+      }
+      if (Array.isArray(p.mock.weight) && p.mock.weight.length) {
+        mockWeight = new Set(p.mock.weight);
+      }
       mockMergeTamgu = !!p.mock.mergeTamgu;
-      const keys = ME.allExamKeys(mockStudents);
-      mockDashKey = (p.mock.dashKey && keys.indexOf(p.mock.dashKey) >= 0) ? p.mock.dashKey : (keys[keys.length - 1] || null);
-      mkRenderChips();
-      mkUpdateTabBadges();
+      if (typeof ME !== 'undefined' && typeof ME.allExamKeys === 'function') {
+        const keys = ME.allExamKeys(mockStudents);
+        mockDashKey = (p.mock.dashKey && keys.indexOf(p.mock.dashKey) >= 0) ? p.mock.dashKey : (keys[keys.length - 1] || null);
+      }
+      if (typeof mkRenderChips === 'function') mkRenderChips();
+      if (typeof mkUpdateTabBadges === 'function') mkUpdateTabBadges();
+      loadedMock = true;
     }
+  } catch (errMock) {
+    console.warn('[복원] 모의고사 복원 경고:', errMock);
+  }
 
-    // ── 내신 ──
-    if (p.naesin && p.naesin.students) {
+  // 2. 내신 복원
+  try {
+    if (p.naesin && p.naesin.students && typeof p.naesin.students === 'object') {
       currentFileType = p.naesin.fileType || 'neis';
-      currentSchoolLevel = p.naesin.schoolLevel || 'high';
+      currentSchoolLevel = 'high';
       ilamData = p.naesin.ilamData || null;
       lastFileName = p.naesin.fileName || '저장된 데이터';
-      selectSchoolLevel(currentSchoolLevel);
-      selectFileType(currentFileType);
+      if (typeof selectSchoolLevel === 'function') selectSchoolLevel('high');
+      if (typeof selectFileType === 'function') selectFileType(currentFileType);
       if (typeof stuNos !== 'undefined') stuNos = p.naesin.nums || {};
-      // 저장분은 이미 합쳐진 결과다 — 지금 화면의 내신과 또 합치지 말고 통째로 바꾼다
-      if (typeof nsMergeOff !== 'undefined') nsMergeOff = true;
-      try { applyParseResult(p.naesin.students, currentFileType === 'ilam', currentSchoolLevel === 'middle'); }
-      finally { if (typeof nsMergeOff !== 'undefined') nsMergeOff = false; }
       if (typeof nsAchOnly !== 'undefined') nsAchOnly = p.naesin.achOnly || {};
+
+      if (typeof nsMergeOff !== 'undefined') nsMergeOff = true;
+      try {
+        applyParseResult(p.naesin.students, currentFileType === 'ilam', false);
+      } finally {
+        if (typeof nsMergeOff !== 'undefined') nsMergeOff = false;
+      }
+      loadedNaesin = true;
     }
+  } catch (errNaesin) {
+    console.warn('[복원] 내신 복원 경고:', errNaesin);
+  }
 
-    // 모의만 있을 때도 학생 목록이 뜨도록
-    mkSyncStudentSelect();
+  // 3. 학생 선택 동기화 및 UI 복원 + 자동 결과 생성
+  try {
+    if (typeof mkSyncStudentSelect === 'function') mkSyncStudentSelect();
 
-    // ── 입력값 ──
     if (p.ui) {
       const c = document.getElementById('career-inp'); if (c) c.value = p.ui.career || '';
       const m = document.getElementById('memo-inp'); if (m) m.value = p.ui.memo || '';
-      const sel = document.getElementById('stu-sel');
-      if (p.ui.student && sel && [...sel.options].some(o => o.value === p.ui.student)) {
-        sel.value = p.ui.student;
-        onStudentChange();
-      }
     }
 
-    mkStoreLast = p.savedAt;
-    mkStoreRender();
-    if (announce) {
-      const parts = [];
-      if (info.naesin) parts.push('내신 ' + info.naesin + '명');
-      if (info.mock) parts.push('모의 ' + info.mock + '명/' + info.exams + '회차');
-      showToast('저장된 데이터를 불러왔습니다 — ' + parts.join(' · '));
+    const sel = document.getElementById('stu-sel');
+    if (sel && sel.options.length > 1) {
+      let targetStudent = (p.ui && p.ui.student) ? p.ui.student : '';
+      let picked = false;
+      if (targetStudent) {
+        for (let i = 0; i < sel.options.length; i++) {
+          if (sel.options[i].value === targetStudent) {
+            sel.selectedIndex = i;
+            picked = true;
+            break;
+          }
+        }
+      }
+      if (!picked) {
+        sel.selectedIndex = 1;
+      }
+      onStudentChange();
+      if (typeof checkAll === 'function') checkAll(true);
+      generateAll();
     }
-    return true;
-  } catch (e) {
-    console.error('[복원] 실패', e);
-    showToast('저장된 데이터를 불러오지 못했습니다. 손상되었을 수 있습니다.');
-    return false;
+  } catch (errUi) {
+    console.warn('[복원] UI 복원 경고:', errUi);
   }
+
+  mkStoreLast = p.savedAt;
+  mkStoreRender();
+  uiRefresh();
+
+  if (announce) {
+    const parts = [];
+    const nNaesin = (p.naesin && p.naesin.students) ? Object.keys(p.naesin.students).length : 0;
+    const nMock = (p.mock && p.mock.students) ? Object.keys(p.mock.students).length : 0;
+    if (nNaesin) parts.push('내신 ' + nNaesin + '명');
+    if (nMock) parts.push('모의 ' + nMock + '명');
+    showToast('저장된 데이터를 불러왔습니다' + (parts.length ? ' — ' + parts.join(' · ') : ''));
+  }
+  return true;
 }
 
 // ═══════════════════════════════════════════════
@@ -7954,9 +8138,16 @@ function mkStoreClear(silent) {
   try { localStorage.removeItem(MK_STORE_KEY); } catch (e) {}
   mkStoreEnabled = true;
   mkStoreLast = null;
+  mkStoreDelOpen = false;
   mkStoreRender();
-  if (!silent) showToast('저장된 성적 데이터를 지웠습니다.');
+  if (!silent) showToast('저장된 성적 데이터를 모두 삭제했습니다.');
   return true;
+}
+
+function mkStoreClearAll() {
+  if (!confirm('브라우저에 저장된 모든 성적 데이터를 완전히 삭제할까요?')) return;
+  mkStoreClear(false);
+  resetAll(true);
 }
 
 // ═══════════════════════════════════════════════
@@ -8022,8 +8213,11 @@ function mkStoreDelHtml() {
 }
 
 function mkStoreDelToggle(open) {
-  const info = mkStoreInfo();
-  if (open && !info.ok) { showToast('지울 저장 데이터가 없습니다.'); return; }
+  const p = mkStorePayload();
+  if (open && (!p || (!p.naesin && !p.mock))) {
+    showToast('골라 지울 저장 데이터가 없습니다. 「저장분 전체 삭제」를 이용하세요.');
+    return;
+  }
   mkStoreDelOpen = !!open;
   mkStoreRender();
 }
@@ -8112,10 +8306,14 @@ function mkStoreRender() {
   const info = mkStoreInfo();
 
   if (!info.ok) {
+    const raw = (function(){ try { return localStorage.getItem(MK_STORE_KEY); } catch(e){ return null; } })();
     if (info.reason === 'unavailable') {
       box.innerHTML = '<div class="mk-store-off">' + ic('alert', 13) + ' 이 브라우저에서는 로컬 저장을 쓸 수 없습니다 ' +
         '<span style="font-weight:600">(사생활 보호 모드이거나 저장이 차단된 상태)</span>. ' +
         '창을 닫으면 올린 성적이 사라집니다.</div>';
+    } else if (raw) {
+      box.innerHTML = '<div class="mk-store-off">' + ic('alert', 13) + ' 이전 저장 데이터가 손상되었거나 호환되지 않습니다. ' +
+        '<div class="mk-store-acts" style="margin-top:8px"><button class="danger" onclick="mkStoreClearAll()">' + ic('trash', 13) + ' 저장 데이터 초기화/삭제</button></div></div>';
     } else {
       box.innerHTML = '<div class="mk-store-empty">' + ic('save', 13) + ' 아직 저장된 성적이 없습니다. ' +
         '파일을 올리면 이 브라우저에 <b>자동으로 저장</b>되어 다음에 열 때 그대로 나옵니다.</div>';
@@ -8135,7 +8333,8 @@ function mkStoreRender() {
     ' <span style="color:var(--ink-3);font-weight:600">(' + mkBytes(info.bytes) + ')</span></div>' +
     '<div class="mk-store-acts">' +
     '<button onclick="mkStoreLoad(true)">' + ic('refresh', 13) + ' 다시 불러오기</button>' +
-    '<button class="danger" onclick="mkStoreDelToggle(true)">' + ic('trash', 13) + ' 저장분 삭제</button>' +
+    '<button class="danger" onclick="mkStoreClearAll()">' + ic('trash', 13) + ' 저장분 전체 삭제</button>' +
+    '<button onclick="mkStoreDelToggle(!mkStoreDelOpen)">' + ic('tune', 13) + (mkStoreDelOpen ? ' 닫기' : ' 골라 지우기') + '</button>' +
     '</div>' + (mkStoreDelOpen ? mkStoreDelHtml() : '') + '</div>';
 }
 

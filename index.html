@@ -415,11 +415,11 @@
               <span class="topn-ctrl-title">반영 과목 수 설정 (총합 자동 계산)</span>
               <div class="topn-ctrl-inputs">
                 <span class="topn-badge topn-badge-total">총 반영</span>
-                <input type="number" id="topTotal" class="topn-mini-input topn-total-input" readonly value="12">
+                <input type="number" id="topTotal" class="topn-mini-input topn-total-input" value="12" min="1" max="50" oninput="onTopNTotalChange()" onchange="onTopNTotalChange()">
                 <span class="topn-badge topn-badge-gen">일반선택</span>
-                <input type="number" id="topGenNum" class="topn-mini-input" value="10" min="0" max="50" onchange="autoExtractTopN()">
+                <input type="number" id="topGenNum" class="topn-mini-input" value="10" min="0" max="50" oninput="onTopNCountChange()" onchange="onTopNCountChange()">
                 <span class="topn-badge topn-badge-car">진로선택</span>
-                <input type="number" id="topCarNum" class="topn-mini-input" value="2" min="0" max="50" onchange="autoExtractTopN()">
+                <input type="number" id="topCarNum" class="topn-mini-input" value="2" min="0" max="50" oninput="onTopNCountChange()" onchange="onTopNCountChange()">
               </div>
             </div>
 
