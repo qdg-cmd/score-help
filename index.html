@@ -438,11 +438,11 @@
             <div class="topn-ctrl-group">
               <span class="topn-ctrl-title">진로선택과목 성취도 변환 등급 설정</span>
               <div class="topn-conv-row">
-                <div class="topn-conv-item"><span>A</span><input type="number" id="convA" value="1" min="1" max="5" onchange="autoExtractTopN()"></div>
-                <div class="topn-conv-item"><span>B</span><input type="number" id="convB" value="2" min="1" max="5" onchange="autoExtractTopN()"></div>
-                <div class="topn-conv-item"><span>C</span><input type="number" id="convC" value="3" min="1" max="5" onchange="autoExtractTopN()"></div>
-                <div class="topn-conv-item"><span>D</span><input type="number" id="convD" value="4" min="1" max="5" onchange="autoExtractTopN()"></div>
-                <div class="topn-conv-item"><span>E</span><input type="number" id="convE" value="5" min="1" max="5" onchange="autoExtractTopN()"></div>
+                <div class="topn-conv-item"><span>A</span><input type="number" id="convA" value="1" min="1" max="5" oninput="autoExtractTopN()" onchange="autoExtractTopN()"></div>
+                <div class="topn-conv-item"><span>B</span><input type="number" id="convB" value="2" min="1" max="5" oninput="autoExtractTopN()" onchange="autoExtractTopN()"></div>
+                <div class="topn-conv-item"><span>C</span><input type="number" id="convC" value="3" min="1" max="5" oninput="autoExtractTopN()" onchange="autoExtractTopN()"></div>
+                <div class="topn-conv-item"><span>D</span><input type="number" id="convD" value="4" min="1" max="5" oninput="autoExtractTopN()" onchange="autoExtractTopN()"></div>
+                <div class="topn-conv-item"><span>E</span><input type="number" id="convE" value="5" min="1" max="5" oninput="autoExtractTopN()" onchange="autoExtractTopN()"></div>
                 <button class="topn-btn-auto" onclick="autoExtractTopN()"><i data-ic="zap"></i> 최적 조합 자동 반영</button>
               </div>
             </div>

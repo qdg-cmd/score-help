@@ -790,25 +790,82 @@ function initBuiltinTestData() {
 }
 
 // ═══════════════════════════════════════════════
-// NEIS PARSER (유연한 헤더 감지 + 수동 매핑 지원)
+// NEIS PARSER (다중 테이블 동적 헤더 감지 + 전과목/진로과목 추출)
 // ═══════════════════════════════════════════════
+function detectRowHeader(row, idx) {
+  if (!row || !Array.isArray(row)) return null;
+  const str = row.filter(x => typeof x === 'string' || typeof x === 'number').map(x => String(x)).join(' ');
+  if (!str.includes('과목') && !str.includes('과 목')) return null;
+  if (!str.includes('교과') && !str.includes('교 과')) return null;
+
+  const f = {};
+  for (let c = 0; c < row.length; c++) {
+    const rawVal = row[c];
+    if (rawVal === '' || rawVal === null || rawVal === undefined) continue;
+    const val = _norm(rawVal);
+    if (!val) continue;
+
+    if (val === '번호' || val === '번' || val === 'no') f.num = c;
+    else if (val === '성명' || val === '이름' || val === '학생명') f.name = c;
+    else if (val === '학년') f.grade = c;
+    else if (val === '학기') f.term = c;
+    else if (val === '교과' || val === '교과명') f.area = c;
+    else if (val === '과목' || val === '과목명' || val === '세부과목' || val === '교과목') f.subj = c;
+    else if (val.includes('학점') || val.includes('단위')) f.unit = c;
+    else if (val.includes('원점수') || val.includes('과목평균')) f.score = c;
+    else if (val.includes('석차등급') || val === '등급') f.rank = c;
+    else if (val.includes('성취도별') || val.includes('분포비율')) f.dist = c;
+    else if (val.includes('성취도')) f.achieve = c;
+    else if (val.includes('수강자수')) f.total = c;
+  }
+  if (f.subj !== undefined) {
+    return {
+      num: f.num ?? -1,
+      name: f.name ?? -1,
+      grade: f.grade ?? -1,
+      term: f.term ?? -1,
+      area: f.area ?? -1,
+      subj: f.subj,
+      unit: f.unit ?? -1,
+      score: f.score ?? -1,
+      achieve: f.achieve ?? -1,
+      rank: f.rank ?? -1,
+      dist: f.dist ?? -1,
+      total: f.total ?? -1,
+      headerRow: idx
+    };
+  }
+  return null;
+}
+
 function parseNEIS(rows, manualCOL) {
   const students = {};
   let curName = null, curGY = null, curTm = null;
 
   let COL = manualCOL || autoDetectColumns(rows);
   if (!COL) { console.warn('[성적파서] 헤더 감지 실패'); return students; }
-  console.log('[성적파서] 컬럼 매핑:', JSON.stringify(COL));
+  console.log('[성적파서] 초기 컬럼 매핑:', JSON.stringify(COL));
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]; if (!row) continue;
+
+    // 다중 테이블 헤더 감지:
+    // 1) 석차등급 일반선택: 교과 N열(12), 과목 R열(16), 석차등급 AK/AL열(35)
+    // 2) 진로선택과목: 교과 M열(11), 과목 Q열(15), 성취도 AD/AE열(28), 성취도별분포비율 AF~AM열(30)
+    // 3) 교양/체육/예술 성취도 전용 과목
+    const newHeader = detectRowHeader(row, i);
+    if (newHeader) {
+      COL = newHeader;
+      curName = null; curGY = null; curTm = null;
+      continue;
+    }
 
     // 헤더행·합계행 스킵
     const c0 = COL.num>=0 ? _norm(row[COL.num]) : '';
     const c1 = COL.name>=0 ? _norm(row[COL.name]) : '';
     const isHeader = Object.values(HEADER_ALIASES).some(arr => arr.some(a => c0===a.toLowerCase()||c1===a.toLowerCase()));
     if (isHeader) continue;
-    if (c0.includes('이수학점')||c1.includes('이수학점')) continue;
+    if (c0.includes('이수학점')||c1.includes('이수학점')||c0.includes('합계')||c1.includes('합계')) continue;
 
     const nameCell = COL.name>=0 ? String(row[COL.name]||'').trim() : '';
     const numRaw   = COL.num>=0 ? row[COL.num] : null;
@@ -827,7 +884,11 @@ function parseNEIS(rows, manualCOL) {
     if (COL.grade>=0) { const v=row[COL.grade]; if (v!==''&&v!==null&&!isNaN(parseFloat(v))) curGY=parseInt(v); }
     if (COL.term>=0)  { const v=row[COL.term];  if (v!==''&&v!==null&&!isNaN(parseFloat(v))) curTm=parseInt(v); }
 
-    const subj = COL.subj>=0 ? String(row[COL.subj]||'').trim() : '';
+    let subj = COL.subj>=0 ? String(row[COL.subj]||'').trim() : '';
+    // 만약 병합/정렬 차이로 주 과목 컬럼이 비어있으면 대체 위치(진로선택 Q열=15, 일반선택 R열=16 등) 탐색
+    if (!subj && COL.rank === -1 && row[15]) subj = String(row[15]).trim();
+    if (!subj && COL.rank >= 0 && row[16]) subj = String(row[16]).trim();
+
     const skipSubjs = ['과목', '과 목', '교과', '교과명', '교과목', '세부과목', '세부과목명', '이수학점 합계', '합계', '비고'];
     if (!subj || skipSubjs.includes(subj) || subj.includes('이수학점') || subj.includes('합계')) continue;
     if (!curGY || !curTm) continue;
@@ -846,9 +907,9 @@ function parseNEIS(rows, manualCOL) {
       }
     }
 
-    // 2) 성취도(A~E, P) 추출: COL.achieve, AD·AE(col 29~30), col 32, AH~AJ(col 33~35) 등 검색
+    // 2) 성취도(A~E, P) 추출: COL.achieve, AD·AE(col 28~30), col 32, AH~AJ(col 33~35) 등 검색
     let achLetter = null;
-    const achCols = [COL.achieve, 29, 30, 32, 33, 34, 35].filter(c => c >= 0);
+    const achCols = [COL.achieve, 28, 29, 30, 31, 32, 33, 34, 35].filter(c => c >= 0);
     for (const ac of achCols) {
       if (ac < row.length) {
         const s = String(row[ac] || '').trim().toUpperCase();
@@ -870,13 +931,13 @@ function parseNEIS(rows, manualCOL) {
     let distArr = null;
     let distText = '';
     if (COL.dist >= 0 && COL.dist < row.length) distText += ' ' + String(row[COL.dist] || '');
-    for (let c = 31; c <= 38 && c < row.length; c++) distText += ' ' + String(row[c] || '');
+    for (let c = 30; c <= 38 && c < row.length; c++) distText += ' ' + String(row[c] || '');
     const dm = [...distText.matchAll(/[A-E]?\s*\(\s*([\d.]+)\s*\)/g)];
     if (dm.length >= 2) {
       distArr = dm.map(m => parseFloat(m[1]));
     } else {
       const rawNums = [];
-      for (let c = 31; c <= 38 && c < row.length; c++) {
+      for (let c = 30; c <= 38 && c < row.length; c++) {
         const val = parseFloat(row[c]);
         if (!isNaN(val) && val > 0 && val <= 100) rawNums.push(val);
       }
@@ -903,7 +964,7 @@ function parseNEIS(rows, manualCOL) {
       else if (tv !== '' && !isNaN(parseFloat(tv))) total = Math.round(parseFloat(tv));
     }
     if (total === null) {
-      for (const tc of [COL.achieve, 32, 35, 34, 30, 29].filter(c => c >= 0)) {
+      for (const tc of [COL.achieve, 28, 32, 35, 34, 30, 29].filter(c => c >= 0)) {
         if (tc < row.length) {
           const tm = String(row[tc] || '').match(/\((\d+)\)/);
           if (tm) { total = parseInt(tm[1], 10); break; }
@@ -921,14 +982,17 @@ function parseNEIS(rows, manualCOL) {
       gradeSystem: (gradeNum !== null && gradeNum > 5) ? 9 : 5
     };
     if (COL.unit >= 0 && COL.unit < row.length) { const u = parseFloat(row[COL.unit]); if (u > 0) nsEntry.unit = u; }
-    if (COL.area >= 0 && COL.area < row.length) { const a = String(row[COL.area] || '').trim(); if (a) nsEntry.area = a; }
+    let area = COL.area >= 0 ? String(row[COL.area] || '').trim() : '';
+    if (!area && COL.rank === -1 && row[11]) area = String(row[11]).trim();
+    if (!area && COL.rank >= 0 && row[12]) area = String(row[12]).trim();
+    if (area) nsEntry.area = area;
 
     // 학생 메인 성적 맵에 누락 없이 등록
     if (!students[curName][key]) students[curName][key] = nsEntry;
 
     // 석차등급이 없는 진로선택과목(A~E)은 별도 성취도 전용 목록에도 동시 보관
     if (type === '진로') {
-      if (!students.__achOnly) Object.defineProperty(students, '__achOnly', { value: {}, enumerable: false });
+      if (!students.__achOnly) Object.defineProperty(students, '__achOnly', { value: {}, enumerable: false, writable: true, configurable: true });
       (students.__achOnly[curName] || (students.__achOnly[curName] = [])).push(nsEntry);
     }
   }
@@ -1124,26 +1188,38 @@ function checkAll(val) {
 // ═══════════════════════════════════════════════
 // 섹션 퀵 점프 네비게이션 (Sticky Quick-Jump & Scrollspy)
 // ═══════════════════════════════════════════════
+let isClickScrolling = false;
+let scrollLockTimer = null;
+
 function quickJumpTo(id) {
   const el = document.getElementById(id);
   if (!el) return;
-  const rbody = document.querySelector('.rbody');
-  const nav = document.getElementById('quick-nav-bar');
-  const navH = nav ? nav.offsetHeight + 14 : 52;
 
-  // PC: .rbody 내부 스크롤 / 모바일: window 스크롤
+  // 1. 클릭된 탭 즉시 활성화
+  document.querySelectorAll('.quick-nav-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.target === id);
+  });
+
+  // 2. 부드러운 스크롤 도중 스크롤스파이가 이전 탭으로 되돌리지 못하도록 락 설정 (850ms)
+  isClickScrolling = true;
+  clearTimeout(scrollLockTimer);
+  scrollLockTimer = setTimeout(() => { isClickScrolling = false; }, 850);
+
+  // 3. 네비게이션 바 높이를 고려한 정밀 스크롤 이동
+  const nav = document.getElementById('quick-nav-bar');
+  const navH = nav ? nav.offsetHeight + 14 : 54;
+  const rbody = document.querySelector('.rbody');
+
   if (rbody && rbody.scrollHeight > rbody.clientHeight && window.getComputedStyle(rbody).overflowY === 'auto') {
-    const targetTop = el.offsetTop - navH;
-    rbody.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+    const rbodyRect = rbody.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const targetScroll = rbody.scrollTop + (elRect.top - rbodyRect.top) - navH;
+    rbody.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
   } else {
     const rect = el.getBoundingClientRect();
     const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
     window.scrollTo({ top: Math.max(0, scrollTop + rect.top - navH), behavior: 'smooth' });
   }
-
-  document.querySelectorAll('.quick-nav-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.target === id);
-  });
 }
 
 function initQuickNavScrollspy() {
@@ -1151,20 +1227,40 @@ function initQuickNavScrollspy() {
   const targetIds = ['grade-table-card', 'near-miss-card', 'topn-card', 'chart-card', 'ns-combo-card', 'prompt-card'];
 
   function onScroll() {
+    if (isClickScrolling) return; // 퀵점프 클릭 이동 중에는 자동 판정 일시 중지
+
     const nav = document.getElementById('quick-nav-bar');
     if (!nav || nav.style.display === 'none') return;
-    const navH = nav.offsetHeight + 24;
+    const navH = nav.offsetHeight || 44;
+    const triggerLine = navH + 50;
 
     let current = null;
+    // 위에서부터 순서대로 검사: 트리거 라인 위로 올라온 마지막 섹션이 현재 활성 섹션 (밀림 버그 원천 해결)
     for (const id of targetIds) {
       const el = document.getElementById(id);
       if (!el || el.style.display === 'none') continue;
       const rect = el.getBoundingClientRect();
-      if (rect.top <= navH + 100 && rect.bottom > navH) {
+      if (rect.top <= triggerLine) {
         current = id;
-        break;
       }
     }
+
+    // 만약 페이지 맨 아래에 도달했을 경우 마지막으로 표시 중인 섹션 활성화
+    const scrollContainer = (rbody && rbody.scrollHeight > rbody.clientHeight && window.getComputedStyle(rbody).overflowY === 'auto') ? rbody : null;
+    const isAtBottom = scrollContainer 
+      ? (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 35)
+      : ((window.innerHeight + (window.pageYOffset || document.documentElement.scrollTop)) >= document.documentElement.scrollHeight - 35);
+
+    if (isAtBottom) {
+      for (let i = targetIds.length - 1; i >= 0; i--) {
+        const el = document.getElementById(targetIds[i]);
+        if (el && el.style.display !== 'none') {
+          current = targetIds[i];
+          break;
+        }
+      }
+    }
+
     if (current) {
       document.querySelectorAll('.quick-nav-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.target === current);
