@@ -438,7 +438,535 @@ body.warm .tagbadge.mid{border-color:#b3c9ac}
 .card-sub{font-size:11.5px;color:var(--ink-3);line-height:1.65;margin-bottom:12px}
 .dual-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px;align-items:start}
 .dual-row>.result-card{height:100%;margin-bottom:0}
-.nm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
+/* ── Near-Miss 개선 그리드 & 카드 ── */
+.nm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 14px;
+}
+@media (max-width: 768px) {
+  .nm-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.nm-card {
+  background: var(--paper);
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  position: relative;
+}
+.nm-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: var(--ink-3);
+}
+.nm-card.rank-1 {
+  border-color: #f59e0b;
+  background: linear-gradient(180deg, #fffcf5 0%, var(--paper) 100%);
+}
+.nm-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.nm-subj-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.nm-rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 800;
+  background: var(--paper-2);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+}
+.nm-rank-badge.rank-1 {
+  background: #f59e0b;
+  color: #fff;
+  border-color: #f59e0b;
+}
+.nm-rank-badge.rank-2 {
+  background: #64748b;
+  color: #fff;
+  border-color: #64748b;
+}
+.nm-rank-badge.rank-3 {
+  background: #94a3b8;
+  color: #fff;
+  border-color: #94a3b8;
+}
+.nm-subj-name {
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.nm-term-pill {
+  font-size: 11px;
+  color: var(--ink-3);
+  background: var(--paper-2);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+.nm-target-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--paper-2);
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line-2);
+}
+.nm-arrow {
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.nm-target-tag {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #059669;
+}
+.nm-meter-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.nm-meter-bar {
+  background: var(--line);
+  height: 8px;
+  border-radius: 99px;
+  overflow: hidden;
+  position: relative;
+}
+.nm-meter-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #10b981, #059669);
+  transition: width .3s ease;
+}
+.nm-meter-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.nm-meter-status {
+  font-weight: 800;
+  color: #059669;
+}
+.nm-stat-banner {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  background: var(--paper-2);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+.nm-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nm-stat-item.primary {
+  border-right: 1px solid var(--line-2);
+}
+.nm-stat-k {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.nm-stat-v {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.nm-stat-item.primary .nm-stat-v {
+  color: #2563eb;
+}
+.nm-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  font-size: 11px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--line-2);
+}
+.nm-detail-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nm-detail-cell.full-width {
+  grid-column: 1 / -1;
+  background: #f8fafc;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+.nm-lbl {
+  color: var(--ink-3);
+  font-size: 10px;
+}
+.nm-val {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.nm-val.highlight {
+  color: #6366f1;
+  font-weight: 800;
+}
+
+/* ── 차트 반영 과목 바 ── */
+.chart-subjs-bar {
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--paper-2);
+  border: 1px solid var(--line-2);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.chart-subjs-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--ink-3);
+}
+.chart-subjs-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.chart-subj-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  font-size: 11.5px;
+}
+.chart-subj-pill .pill-name {
+  color: var(--ink);
+}
+.chart-subj-pill .pill-meta {
+  color: var(--ink-3);
+  font-size: 10.5px;
+}
+
+/* ── 대학별 맞춤 상위 교과 등급 알아보기 (Top-N 시뮬레이터) ── */
+.topn-head-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  gap: 8px;
+}
+.topn-btn-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: all .15s;
+}
+.topn-btn-reset:hover {
+  background: var(--paper-2);
+  color: var(--ink);
+  border-color: var(--ink-3);
+}
+.topn-controls {
+  background: var(--paper-2);
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.topn-ctrl-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.topn-ctrl-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.topn-ctrl-inputs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.topn-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.topn-badge-total {
+  background: #374151;
+  color: #fff;
+}
+.topn-badge-gen {
+  background: #10b981;
+  color: #fff;
+}
+.topn-badge-car {
+  background: #f59e0b;
+  color: #fff;
+}
+.topn-mini-input {
+  width: 48px;
+  height: 28px;
+  text-align: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  background: #fff;
+  color: var(--ink);
+}
+.topn-total-input {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+.topn-conv-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.topn-conv-item {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 11.5px;
+}
+.topn-conv-item span {
+  background: var(--paper-2);
+  padding: 4px 8px;
+  font-weight: 800;
+  color: var(--ink-2);
+  border-right: 1px solid var(--line);
+}
+.topn-conv-item input {
+  border: none;
+  width: 36px;
+  height: 26px;
+  text-align: center;
+  font-weight: 800;
+  outline: none;
+  color: var(--ink);
+}
+.topn-btn-auto {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--ink);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 11.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.topn-btn-auto:hover {
+  opacity: .88;
+}
+.topn-avg-box {
+  background: #f8fafc;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 12px;
+  text-align: center;
+  padding: 18px 24px;
+  margin-bottom: 16px;
+}
+.topn-avg-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-3);
+  margin-bottom: 4px;
+}
+.topn-avg-val {
+  font-size: 2.6rem;
+  font-weight: 900;
+  color: #1e293b;
+  line-height: 1.15;
+}
+.topn-avg-sub {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  margin-top: 4px;
+}
+.topn-section-title {
+  font-size: 12.5px;
+  font-weight: 800;
+  margin: 14px 0 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.topn-title-ref {
+  color: #059669;
+}
+.topn-title-unref {
+  color: #4b5563;
+}
+.topn-section-hint {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+.topn-box {
+  border-radius: 10px;
+  padding: 12px;
+  min-height: 76px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+.topn-box-ref {
+  border: 1.5px solid rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.04);
+}
+.topn-box-unref {
+  border: 1.5px dashed var(--line-2);
+  background: var(--paper-2);
+}
+.topn-unref-group {
+  width: 100%;
+  margin-bottom: 8px;
+}
+.topn-unref-group-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--ink-3);
+  margin-bottom: 6px;
+  padding-left: 6px;
+  border-left: 3px solid var(--ink-3);
+}
+.topn-unref-group-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.topn-tag {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 12px;
+  cursor: pointer;
+  transition: all .15s ease;
+  position: relative;
+  user-select: none;
+  min-width: 135px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.topn-tag:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+  border-color: var(--ink);
+}
+.topn-tag.tag-gen {
+  border-left: 4px solid #10b981;
+}
+.topn-tag.tag-car {
+  border-left: 4px solid #f59e0b;
+}
+.topn-tag.best {
+  border: 2px solid #3b82f6;
+  background: #eff6ff;
+}
+.topn-best-badge {
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+.topn-tag-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.topn-tag-type {
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: #fff;
+}
+.topn-tag-type.gen {
+  background: #10b981;
+}
+.topn-tag-type.car {
+  background: #f59e0b;
+}
+.topn-tag-title {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.topn-tag-sem {
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+.topn-tag-grade {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink-2);
+  margin-top: 2px;
+}
+.topn-tag-conv {
+  font-size: 10px;
+  color: var(--ink-3);
+  font-weight: normal;
+}
 
 /* ── 표 ── */
 .grade-table,.overview-table,.mk-table{width:100%;font-size:12px}

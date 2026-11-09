@@ -400,27 +400,59 @@
           <div id="near-miss-content"></div>
         </div>
 
-        <!-- 3. AI 맞춤 상담 프롬프트 생성기 -->
-        <div class="prompt-card" id="prompt-card">
-          <div class="prompt-hdr">
-            <div class="t"><i data-ic="clipboard"></i> 3. AI 맞춤 상담 프롬프트 생성기 <span class="badge-5g">학생 · 학부모 맞춤</span></div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <div class="prompt-type-chips">
-                <button class="ptchip active" id="ptchip-student" onclick="setPromptType('student')"><i data-ic="user" data-s="12"></i> 학생 상담용</button>
-                <button class="ptchip" id="ptchip-parent" onclick="setPromptType('parent')"><i data-ic="users" data-s="12"></i> 학부모 상담용</button>
+        <!-- 3. 대학별 맞춤 상위 교과 등급 알아보기 (Top-N 시뮬레이터) -->
+        <div class="result-card print-split" id="topn-card">
+          <div class="topn-head-row">
+            <div>
+              <div class="result-title" style="margin-bottom:2px"><i data-ic="award"></i> 3. 대학별 맞춤 상위 교과 등급 알아보기 <span class="badge-5g">Top-N 시뮬레이터</span></div>
+              <div class="card-sub" style="margin-bottom:0">학생부 교과 전형 등 대학별 반영 기준에 맞춰 일반/진로선택 과목을 최적 조합으로 계산합니다.</div>
+            </div>
+            <button class="topn-btn-reset" onclick="resetTopNUI()" title="전체 과목 미반영으로 초기화"><i data-ic="refresh"></i> 초기화</button>
+          </div>
+
+          <div class="topn-controls">
+            <div class="topn-ctrl-group">
+              <span class="topn-ctrl-title">반영 과목 수 설정 (총합 자동 계산)</span>
+              <div class="topn-ctrl-inputs">
+                <span class="topn-badge topn-badge-total">총 반영</span>
+                <input type="number" id="topTotal" class="topn-mini-input topn-total-input" readonly value="12">
+                <span class="topn-badge topn-badge-gen">일반선택</span>
+                <input type="number" id="topGenNum" class="topn-mini-input" value="10" min="0" max="50" onchange="autoExtractTopN()">
+                <span class="topn-badge topn-badge-car">진로선택</span>
+                <input type="number" id="topCarNum" class="topn-mini-input" value="2" min="0" max="50" onchange="autoExtractTopN()">
               </div>
-              <button class="copy-btn" id="copy-btn" onclick="copyPrompt()"><i data-ic="copy" data-s="14"></i> 원클릭 복사</button>
+            </div>
+
+            <div class="topn-ctrl-group">
+              <span class="topn-ctrl-title">진로선택과목 성취도 변환 등급 설정</span>
+              <div class="topn-conv-row">
+                <div class="topn-conv-item"><span>A</span><input type="number" id="convA" value="1" min="1" max="5" onchange="autoExtractTopN()"></div>
+                <div class="topn-conv-item"><span>B</span><input type="number" id="convB" value="2" min="1" max="5" onchange="autoExtractTopN()"></div>
+                <div class="topn-conv-item"><span>C</span><input type="number" id="convC" value="3" min="1" max="5" onchange="autoExtractTopN()"></div>
+                <div class="topn-conv-item"><span>D</span><input type="number" id="convD" value="4" min="1" max="5" onchange="autoExtractTopN()"></div>
+                <div class="topn-conv-item"><span>E</span><input type="number" id="convE" value="5" min="1" max="5" onchange="autoExtractTopN()"></div>
+                <button class="topn-btn-auto" onclick="autoExtractTopN()"><i data-ic="zap"></i> 최적 조합 자동 반영</button>
+              </div>
             </div>
           </div>
-          <textarea id="prompt-output" readonly></textarea>
-          <div style="padding:13px 16px;border-top:1px solid var(--line)">
-            <div style="font-size:11.5px;font-weight:700;color:var(--ink-3);margin-bottom:8px">복사한 프롬프트를 원하는 AI 모델에 붙여넣어 즉시 상담 리포트를 완성하세요:</div>
-            <div class="ai-links">
-              <a href="https://gemini.google.com" target="_blank" rel="noopener">Google Gemini</a>
-              <a href="https://claude.ai" target="_blank" rel="noopener">Claude</a>
-              <a href="https://chatgpt.com" target="_blank" rel="noopener">ChatGPT</a>
-            </div>
+
+          <div class="topn-avg-box">
+            <div class="topn-avg-label">선택된 과목 환산 평균 등급</div>
+            <div class="topn-avg-val" id="topNAvgDisplay">- 등급</div>
+            <div class="topn-avg-sub" id="topNAvgSub">일반과목 0개 + 진로선택 0개 반영</div>
           </div>
+
+          <div class="topn-section-title topn-title-ref">
+            <span><i data-ic="check-circle"></i> 반영된 과목 (<span id="topNReflectedCount">0</span>개)</span>
+            <span class="topn-section-hint">※ 카드를 클릭하면 반영에서 제외됩니다</span>
+          </div>
+          <div id="reflectedContainer" class="topn-box topn-box-ref"></div>
+
+          <div class="topn-section-title topn-title-unref">
+            <span><i data-ic="plus-circle"></i> 미반영 과목 (<span id="topNUnreflectedCount">0</span>개)</span>
+            <span class="topn-section-hint">※ 카드를 클릭하면 반영에 추가됩니다 (최고 등급 추천 표시)</span>
+          </div>
+          <div id="unreflectedContainer" class="topn-box topn-box-unref"></div>
         </div>
 
         <!-- 4. 차트 및 심층 시각화 카드 -->
@@ -428,6 +460,7 @@
           <div class="result-title"><i data-ic="trend"></i> 4. 과목별 5등급 성적 추이 그래프</div>
           <div class="card-sub">학기별 등급 변화를 선 그래프로 직관적으로 확인합니다. (위로 갈수록 1등급에 가깝습니다)</div>
           <div id="chart-tabs" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px"></div>
+          <div id="chart-subjs-bar" class="chart-subjs-bar"></div>
           <div class="chart-wrap"><canvas id="trend-chart"></canvas></div>
         </div>
 
@@ -470,6 +503,29 @@
           <div class="result-title"><i data-ic="users"></i> 학급 한눈에 보기</div>
           <div class="mk-teacher-only"><i data-ic="lock" data-s="15"></i><div><b>교사용 화면입니다</b><span>다른 학생의 이름과 성적이 나오므로 인쇄하지 않습니다.</span></div></div>
           <div id="ns-class-content"></div>
+        </div>
+
+        <!-- 5. AI 맞춤 상담 프롬프트 생성기 (학급 한눈에 보기 하단 배치) -->
+        <div class="prompt-card" id="prompt-card">
+          <div class="prompt-hdr">
+            <div class="t"><i data-ic="clipboard"></i> AI 맞춤 상담 프롬프트 생성기 <span class="badge-5g">학생 · 학부모 맞춤</span></div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <div class="prompt-type-chips">
+                <button class="ptchip active" id="ptchip-student" onclick="setPromptType('student')"><i data-ic="user" data-s="12"></i> 학생 상담용</button>
+                <button class="ptchip" id="ptchip-parent" onclick="setPromptType('parent')"><i data-ic="users" data-s="12"></i> 학부모 상담용</button>
+              </div>
+              <button class="copy-btn" id="copy-btn" onclick="copyPrompt()"><i data-ic="copy" data-s="14"></i> 원클릭 복사</button>
+            </div>
+          </div>
+          <textarea id="prompt-output" readonly></textarea>
+          <div style="padding:13px 16px;border-top:1px solid var(--line)">
+            <div style="font-size:11.5px;font-weight:700;color:var(--ink-3);margin-bottom:8px">※ 복사한 프롬프트를 원하는 AI 모델에 붙여넣어 즉시 심층 상담 리포트를 완성하세요:</div>
+            <div class="ai-links">
+              <a href="https://gemini.google.com" target="_blank" rel="noopener">Google Gemini</a>
+              <a href="https://claude.ai" target="_blank" rel="noopener">Claude</a>
+              <a href="https://chatgpt.com" target="_blank" rel="noopener">ChatGPT</a>
+            </div>
+          </div>
         </div></div><!-- /tab-naesin -->
 
       <div id="tab-mock" style="display:none"></div>

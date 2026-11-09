@@ -1053,6 +1053,7 @@ function generateAll() {
     buildRadarChart();
     buildCatBarChart();
     buildNearMiss();
+    initTopNData();
   }
   buildPrompt();
   nsBuildAll(); // NS
@@ -1510,7 +1511,7 @@ function getBaseName(subj) {
 let currentChartCategory = null;
 
 function buildChart() {
-  const data = allStudents[currentStudent];
+  const data = (allStudents && allStudents[currentStudent]) || {};
   const termOrder = ['1학년 1학기','1학년 2학기','2학년 1학기','2학년 2학기','3학년 1학기','3학년 2학기'];
 
 
@@ -1557,14 +1558,97 @@ function buildChart() {
 
   const catInfo = CATEGORY_MAP.find(c => c.name === currentChartCategory) || CATEGORY_MAP[CATEGORY_MAP.length-1];
 
+  // ── [개선 3] 어떤 과목이 그래프에 반영되었는지 볼 수 있는 바 ──
+  const subjsBar = document.getElementById('chart-subjs-bar');
+  if (subjsBar) {
+    if (currentChartCategory === '전체과목') {
+      subjsBar.innerHTML = `
+        <div class="chart-subjs-title"><i data-ic="layers"></i> 전체 반영 교과군 (${cats.filter(c=>c!=='전체과목').length}개 계열 · 총 ${checkedSubjects.size}개 과목):</div>
+        <div class="chart-subjs-pills">
+          ${cats.filter(c=>c!=='전체과목').map(c => {
+            const count = (categoryGroups[c]||[]).length;
+            return `<span class="chart-subj-pill"><b class="pill-name">${c}</b> <span class="pill-meta">${count}개 과목</span></span>`;
+          }).join('')}
+        </div>
+      `;
+    } else {
+      subjsBar.innerHTML = `
+        <div class="chart-subjs-title"><i data-ic="check-circle"></i> [${currentChartCategory}] 그래프 반영 과목 (총 ${subjsInCat.length}개):</div>
+        <div class="chart-subjs-pills">
+          ${subjsInCat.map(subj => {
+            const tookTerms = allUsedTerms.filter(t => data[`${subj}__${t}`]);
+            const latestT = tookTerms[tookTerms.length - 1];
+            const ent = latestT ? data[`${subj}__${latestT}`] : null;
+            const gStr = ent ? (ent.grade != null ? `${ent.grade}등급` : (ent.achieve ? `성취도 ${ent.achieve}` : '이수')) : '미이수';
+            const tStr = latestT ? nsShortTerm(latestT) : '';
+            return `<span class="chart-subj-pill"><b class="pill-name">${subj}</b> <span class="pill-meta">(${tStr ? tStr + ' ' : ''}${gStr})</span></span>`;
+          }).join('')}
+        </div>
+      `;
+    }
+  }
+
   const datasets = [];
+  const SUBJ_PALETTE = ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#64748b', '#14b8a6', '#6366f1'];
 
   if (currentChartCategory === '전체과목') {
-    // NS — 교과별 평균 선 (과목 하나씩 그리면 한 학기 과목은 떨어진 점이 된다)
+    // NS — 교과별 평균 선 (전체과목 탭은 그대로 유지)
     nsTrendCatLines(data, subjsInCat, allUsedTerms).forEach(l => datasets.push(nsTrendDataset(l, true)));
   } else {
-    // NS — 전체과목 탭과 같은 계산·모양 (예상 학기로 들어가는 선은 점선)
-    nsTrendCatLines(data, subjsInCat, allUsedTerms).forEach(l => datasets.push(nsTrendDataset(l, true)));
+    // ── [개선 3] 각 계열, 예체능, 제2외국어/기타: 개별 과목선 + 계열 평균 점선 ──
+    subjsInCat.forEach((subj, sIdx) => {
+      const color = SUBJ_PALETTE[sIdx % SUBJ_PALETTE.length];
+      const pts = [];
+      const labels = [];
+      let hasData = false;
+      allUsedTerms.forEach(t => {
+        const ent = data[`${subj}__${t}`];
+        if (ent && ent.grade != null) {
+          pts.push(ent.grade);
+          labels.push(`${subj} (${t}: ${ent.grade}등급${ent.score != null ? ' · ' + ent.score + '점' : ''})`);
+          hasData = true;
+        } else {
+          pts.push(null);
+          labels.push(null);
+        }
+      });
+      if (hasData) {
+        datasets.push({
+          label: subj,
+          data: pts,
+          _labels: labels,
+          borderColor: color,
+          backgroundColor: color + '22',
+          borderWidth: 2.5,
+          pointRadius: 5,
+          pointHoverRadius: 8,
+          pointBackgroundColor: color,
+          pointBorderColor: '#fff',
+          pointBorderWidth: 1.5,
+          tension: 0.15,
+          spanGaps: false
+        });
+      }
+    });
+
+    // 보조 기준: 계열 전체 평균선 (점선)
+    const catLines = nsTrendCatLines(data, subjsInCat, allUsedTerms);
+    if (catLines.length > 0 && subjsInCat.length > 1) {
+      const cl = catLines[0];
+      datasets.push({
+        label: `[${currentChartCategory} 평균]`,
+        data: cl.pts,
+        borderColor: '#94a3b8',
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        borderDash: [5, 4],
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: '#94a3b8',
+        tension: 0.15,
+        spanGaps: true
+      });
+    }
   }
 
   if (trendChart) trendChart.destroy();
@@ -1892,22 +1976,24 @@ function generatePalette(baseHex, n) {
 }
 
 // ═══════════════════════════════════════════════
-// NEAR-MISS: 등급 경계 아쉬운 과목 순위 (학년 필터 포함)
+// NEAR-MISS: 5등급 위치 및 추월 가능 과목 (학년 필터 포함)
 // ═══════════════════════════════════════════════
-const ZSCORE_CUT9 = [null, 1.75, 1.23, 0.74, 0.25, -0.25, -0.74, -1.23, -1.75];
+// 5등급제 컷오프 Z점수 (1등급: 상위 10%, 2등급: 상위 34%, 3등급: 상위 66%, 4등급: 상위 90%)
+const ZSCORE_CUT5 = [null, 1.282, 0.412, -0.412, -1.282];
 let currentNMGrade = '전체'; // '전체' | '1학년' | '2학년' | '3학년'
 
 function calcGap(d, studentName, subjectKey) { return nsGapByAhead(calcGapBase(d, studentName, subjectKey), studentName, subjectKey); } // NS
 function calcGapBase(d, studentName, subjectKey) {
   const g = d.grade;
   if (g <= 1) return null;
-  // 9등급제: stddev 있을 때
+  // 5등급제: stddev 있을 때 정규분포 z점수 기반
   if (d.stddev != null && d.stddev > 0 && d.score != null && d.avg != null) {
     const z = (d.score - d.avg) / d.stddev;
-    const zTarget = ZSCORE_CUT9[g - 1];
+    const zTarget = ZSCORE_CUT5[g - 1] !== undefined ? ZSCORE_CUT5[g - 1] : 0;
     const ptGap = (zTarget - z) * d.stddev;
-    return { system:'9등급', grade:g, gap:parseFloat(ptGap.toFixed(1)),
-             gapLabel:`${ptGap.toFixed(1)}점 필요`, sortKey:ptGap,
+    const gapVal = parseFloat(ptGap.toFixed(1));
+    return { system:'5등급', grade:g, gap:gapVal,
+             gapLabel: (gapVal > 0 ? `+${gapVal}점 필요` : `경계 근접`), sortKey: gapVal,
              detail:`내 점수 ${d.score}점 / 평균 ${d.avg}점 / 표준편차 ${d.stddev}점` };
   }
   // 5등급제: distArr 있을 때 (NEIS 교과학습발달상황)
@@ -1930,18 +2016,22 @@ function calcGapBase(d, studentName, subjectKey) {
     if (pa) {
       const gapPct = parseFloat(((pa.peopleAhead / pa.total) * 100).toFixed(2));
       const detail = `현재 ${pa.myRank}위${pa.tieCount > 1 ? `~${pa.lastRank}위(동${pa.tieCount}명)` : ''} / ${pa.total}명 · 목표 ${pa.cutRank}위 이내`;
-      const sysLabel = (d.gradeSystem || 5) === 9 ? '9등급(석차)' : '5등급(석차)';
-      return { system: sysLabel, grade:g, gap:gapPct,
+      return { system: '5등급(석차)', grade:g, gap:gapPct,
                gapLabel:`앞에 ${pa.peopleAhead}명 (${gapPct.toFixed(1)}%p)`, sortKey:pa.peopleAhead,
                detail };
     }
   }
   // 기본 fallback
-  return { system:'등급', grade:g, gap:null, gapLabel:'석차 데이터 없음', sortKey:9999, detail:'' };
+  return { system:'5등급', grade:g, gap:null, gapLabel:'석차 데이터 없음', sortKey:9999, detail:'' };
 }
 
 function buildNearMiss() {
-  const data = allStudents[currentStudent];
+  const data = (allStudents && allStudents[currentStudent]) || {};
+  if (!Object.keys(data).length) {
+    const wrap = document.getElementById('near-miss-content');
+    if (wrap) wrap.innerHTML = '<div style="font-size:12px;color:var(--ink-3);padding:14px 0;text-align:center">데이터가 없습니다.</div>';
+    return;
+  }
   const termOrder = ['1학년 1학기','1학년 2학기','2학년 1학기','2학년 2학기','3학년 1학기','3학년 2학기'];
 
   // 학년 필터 탭 구성 — 학생이 실제 이수한 학년만 표시
@@ -1977,7 +2067,7 @@ function buildNearMiss() {
       if (d.grade <= 1) break;
       const key = `${subj}__${term}`;
       const nm = calcGap(d, currentStudent, key);
-      if (nm) items.push({ subj, term, ...nm });
+      if (nm) items.push({ subj, term, rawEntry: d, ...nm });
       break;
     }
   });
@@ -1985,43 +2075,339 @@ function buildNearMiss() {
 
   const wrap = document.getElementById('near-miss-content');
   if (!items.length) {
-    wrap.innerHTML = '<div style="font-size:12px;color:var(--ink-3);padding:8px 0">해당 학년에 아쉬운 과목이 없거나 데이터가 없습니다.</div>';
+    wrap.innerHTML = '<div style="font-size:12px;color:var(--ink-3);padding:14px 0;text-align:center">해당 학년에 1등급 외 아쉬운 과목이 없거나 데이터가 없습니다.</div>';
     return;
   }
 
-  const GC = {1:'#34C759',2:'#34C759',3:'#f59e0b',4:'#e06b8b',5:'#e06b8b',6:'#c0392b',7:'#a93226',8:'#922b21',9:'#7b241c'};
   let html = '<div class="nm-grid">';
   items.forEach((it, idx) => {
-    const rank = idx+1;
-    const medal = rank===1?'<b style="color:var(--accent)">1위</b>':rank===2?'<b style="color:var(--ink-2)">2위</b>':rank===3?'<b style="color:var(--ink-3)">3위</b>':`<span style="font-size:11px;font-weight:700;color:var(--ink-3)">${rank}위</span>`;
-    const gc = GC[it.grade]||'#aeaeb2';
-    const barPct = nsGapBar(it); // NS — 같은 등급 안에서의 위치 (오른쪽 끝 = 한 등급 위 커트)
-    html += `<div style="background:var(--paper);border:1.5px solid var(--line-2);border-radius:12px;padding:10px 14px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <div style="display:flex;align-items:center;gap:7px">
-          <span style="font-size:14px">${medal}</span>
-          <span style="font-size:12px;font-weight:800;color:var(--ink)">${it.subj}</span>
-          <span style="font-size:10px;color:var(--ink-3)">${it.term}</span>
+    const rank = idx + 1;
+    const barPct = nsGapBar(it);
+    const pa = getPeopleAhead(`${it.subj}__${it.term}`, currentStudent);
+    const d = it.rawEntry || data[`${it.subj}__${it.term}`] || {};
+    const rankBadgeClass = rank <= 3 ? `rank-${rank}` : '';
+    const cardRankClass = rank === 1 ? 'rank-1' : '';
+
+    const ptGapStr = (typeof it.gap === 'number' && it.gap !== 0)
+      ? (it.gap > 0 ? `+${it.gap.toFixed(1)}점 필요` : `${it.gap.toFixed(1)}점 필요`)
+      : (it.gapLabel || '경계 근접');
+
+    const fillPct = barPct !== null ? Math.round(barPct) : 50;
+
+    html += `
+      <div class="nm-card ${cardRankClass}">
+        <div class="nm-card-header">
+          <div class="nm-subj-info">
+            <span class="nm-rank-badge ${rankBadgeClass}">${rank}위</span>
+            <span class="nm-subj-name">${it.subj}</span>
+            <span class="nm-term-pill">${it.term}</span>
+          </div>
+          <div class="nm-target-pill">
+            <span class="grade-badge g${it.grade}">${it.grade}등급</span>
+            <span class="nm-arrow">➔</span>
+            <span class="nm-target-tag">${it.grade - 1}등급 목표</span>
+          </div>
         </div>
-        <div style="display:flex;align-items:center;gap:5px">
-          <span class="grade-badge g${it.grade}">${it.grade}등급</span>
-          <span style="font-size:10px;font-weight:800;color:var(--good)">→ ${it.grade-1}등급 목표</span>
+
+        <div class="nm-meter-wrap" title="현재 등급 내 상대적 위치 (오른쪽이 상위 등급 컷)">
+          <div class="nm-meter-bar">
+            <div class="nm-meter-fill" style="width: ${fillPct}%"></div>
+          </div>
+          <div class="nm-meter-labels">
+            <span>등급 내 위치: <b>상위 ${Math.max(1, 100 - fillPct)}%</b></span>
+            <span class="nm-meter-status">추월 가시권</span>
+          </div>
+        </div>
+
+        <div class="nm-stat-banner">
+          <div class="nm-stat-item primary">
+            <span class="nm-stat-k">추월 필요 인원</span>
+            <span class="nm-stat-v">${pa && pa.peopleAhead != null ? `${pa.estimated ? '약 ' : ''}${pa.peopleAhead}명` : '추월 가시권'}</span>
+          </div>
+          <div class="nm-stat-item">
+            <span class="nm-stat-k">필요 원점수 격차</span>
+            <span class="nm-stat-v">${ptGapStr}</span>
+          </div>
+        </div>
+
+        <div class="nm-detail-grid">
+          <div class="nm-detail-cell">
+            <span class="nm-lbl">내 점수 / 과목 평균</span>
+            <span class="nm-val"><b>${d.score != null ? d.score + '점' : '-'}</b> / ${d.avg != null ? d.avg + '점' : '-'}</span>
+          </div>
+          <div class="nm-detail-cell">
+            <span class="nm-lbl">표준편차 / 수강자수</span>
+            <span class="nm-val">${d.stddev != null ? d.stddev + '점' : '-'} / ${pa && pa.total ? pa.total + '명' : (d.total ? d.total + '명' : '-')}</span>
+          </div>
+          <div class="nm-detail-cell full-width">
+            <span class="nm-lbl">석차 변동 목표</span>
+            <span class="nm-val highlight">${pa && pa.cutRank != null ? `${pa.estimated ? '추정 ' : ''}${pa.myRank}위 ➔ ${pa.cutRank}위 이내 진입` : '상위 등급 진입 가능'}</span>
+          </div>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px" title="막대: 지금 등급에 든 학생 중 내 위치. 오른쪽 끝이 한 등급 위 커트라인입니다.">
-        <div style="flex:1;background:var(--line);border-radius:99px;height:6px;overflow:hidden;${barPct===null?'display:none':''}">
-          <div style="width:${(barPct||0).toFixed(0)}%;height:100%;background:linear-gradient(90deg,var(--good),#34C759);border-radius:99px"></div>
-        </div>
-        <span style="font-size:11px;font-weight:700;color:var(--good);white-space:nowrap">${it.gapLabel}</span>
-      </div>
-      ${it.detail?`<div style="font-size:10px;color:var(--ink-3)">${it.detail} · ${it.system}</div>`:''}
-      ${(()=>{ const pa=getPeopleAhead(`${it.subj}__${it.term}`,currentStudent); if (!pa || pa.peopleAhead === null) return '';
-        if (pa.estimated) return `<div style="font-size:10px;font-weight:800;color:#8b5cf6;margin-top:3px">앞에 <b>약 ${pa.peopleAhead}명</b> 추월 필요 (추정 ${pa.myRank}위/${pa.total}명 → ${pa.cutRank}위 이내) <span style="opacity:.65;font-weight:700">※ 원점수·분포 기반 추정</span></div>`;
-        return `<div style="font-size:10px;font-weight:800;color:#8b5cf6;margin-top:3px">앞에 <b>${pa.peopleAhead}명</b> 추월 필요 (현재 ${pa.myRank}위${pa.tieCount>1?'~'+pa.lastRank+'위 동석차'+pa.tieCount+'명':''} → ${pa.cutRank}위 이내)</div>`; })()}
-    </div>`;
+    `;
   });
   html += '</div>';
   wrap.innerHTML = html;
+}
+
+/* ════════════════════════════════════════════════════════════
+   3. 대학별 맞춤 상위 교과 등급 알아보기 (Top-N 시뮬레이터)
+════════════════════════════════════════════════════════════ */
+let topNData = [];
+let reflectedSubs = [];
+let unreflectedSubs = [];
+
+function initTopNData() {
+  const data = allStudents[currentStudent] || {};
+  const ao = (nsAchOnly && nsAchOnly[currentStudent]) || [];
+  const list = [];
+  let uid = 0;
+
+  // 1. 일반선택 / 석차등급 과목
+  Object.values(data).forEach(d => {
+    if (!checkedSubjects.has(d.subject)) return;
+    if (d.grade != null && d.grade >= 1 && d.grade <= 5) {
+      list.push({
+        id: `topn_${++uid}_${d.term}_${d.subject}`.replace(/\s+/g, '_'),
+        subject: d.subject,
+        term: d.term,
+        type: '일반',
+        grade: d.grade,
+        achieve: d.achieve || null,
+        unit: d.unit || 1,
+        score: d.score,
+        avg: d.avg,
+        stddev: d.stddev
+      });
+    } else if (d.achieve) {
+      list.push({
+        id: `topn_${++uid}_${d.term}_${d.subject}`.replace(/\s+/g, '_'),
+        subject: d.subject,
+        term: d.term,
+        type: '진로',
+        grade: null,
+        achieve: d.achieve,
+        unit: d.unit || 1,
+        score: d.score,
+        avg: d.avg,
+        stddev: d.stddev
+      });
+    }
+  });
+
+  // 2. 성취도 전용 (진로선택과목)
+  ao.forEach(d => {
+    if (list.some(item => item.subject === d.subject && item.term === d.term)) return;
+    const ach = d.achieve || 'A';
+    list.push({
+      id: `topn_${++uid}_${d.term}_${d.subject}`.replace(/\s+/g, '_'),
+      subject: d.subject,
+      term: d.term,
+      type: '진로',
+      grade: null,
+      achieve: ach,
+      unit: d.unit || 1,
+      score: d.score,
+      avg: d.avg,
+      stddev: d.stddev
+    });
+  });
+
+  topNData = list;
+  autoExtractTopN();
+}
+
+function getConvMap() {
+  const getVal = (id, def) => {
+    const el = document.getElementById(id);
+    return el ? (parseFloat(el.value) || def) : def;
+  };
+  return {
+    'A': getVal('convA', 1),
+    'B': getVal('convB', 2),
+    'C': getVal('convC', 3),
+    'D': getVal('convD', 4),
+    'E': getVal('convE', 5)
+  };
+}
+
+function getEffectiveGrade(d, convMap) {
+  if (d.type === '일반' && d.grade) return d.grade;
+  if (d.type === '진로' && d.achieve) return convMap[d.achieve] || 5;
+  return 5;
+}
+
+function resetTopNUI() {
+  reflectedSubs = [];
+  unreflectedSubs = [...topNData];
+  renderTopNUI();
+}
+
+function autoExtractTopN() {
+  const genEl = document.getElementById('topGenNum');
+  const carEl = document.getElementById('topCarNum');
+  const genLimit = genEl ? (parseInt(genEl.value, 10) || 0) : 10;
+  const carLimit = carEl ? (parseInt(carEl.value, 10) || 0) : 2;
+  const convMap = getConvMap();
+
+  const sorted = [...topNData].sort((a, b) => getEffectiveGrade(a, convMap) - getEffectiveGrade(b, convMap));
+
+  let genCount = 0;
+  let carCount = 0;
+  reflectedSubs = [];
+  unreflectedSubs = [];
+
+  sorted.forEach(d => {
+    if (d.type === '일반' && genCount < genLimit) {
+      reflectedSubs.push(d);
+      genCount++;
+    } else if (d.type === '진로' && carCount < carLimit) {
+      reflectedSubs.push(d);
+      carCount++;
+    } else {
+      unreflectedSubs.push(d);
+    }
+  });
+
+  renderTopNUI();
+}
+
+window.toggleTopNSub = function(id, isReflected) {
+  if (isReflected) {
+    const idx = reflectedSubs.findIndex(d => d.id === id);
+    if (idx > -1) {
+      unreflectedSubs.push(reflectedSubs.splice(idx, 1)[0]);
+    }
+  } else {
+    const idx = unreflectedSubs.findIndex(d => d.id === id);
+    if (idx > -1) {
+      reflectedSubs.push(unreflectedSubs.splice(idx, 1)[0]);
+    }
+  }
+  renderTopNUI();
+};
+
+function renderTopNUI() {
+  const convMap = getConvMap();
+  const card = document.getElementById('topn-card');
+  if (!card) return;
+
+  const genCount = reflectedSubs.filter(d => d.type === '일반').length;
+  const carCount = reflectedSubs.filter(d => d.type === '진로').length;
+  const totalCount = genCount + carCount;
+
+  const totalInput = document.getElementById('topTotal');
+  if (totalInput) totalInput.value = totalCount;
+  const genInput = document.getElementById('topGenNum');
+  if (genInput) genInput.value = genCount;
+  const carInput = document.getElementById('topCarNum');
+  if (carInput) carInput.value = carCount;
+
+  const refCountEl = document.getElementById('topNReflectedCount');
+  if (refCountEl) refCountEl.textContent = totalCount;
+  const unrefCountEl = document.getElementById('topNUnreflectedCount');
+  if (unrefCountEl) unrefCountEl.textContent = unreflectedSubs.length;
+
+  // 평균 계산
+  let totalGrade = 0;
+  let totalUnit = 0;
+  let weightedTotal = 0;
+  reflectedSubs.forEach(d => {
+    const eg = getEffectiveGrade(d, convMap);
+    totalGrade += eg;
+    const u = d.unit || 1;
+    totalUnit += u;
+    weightedTotal += eg * u;
+  });
+
+  const avg = reflectedSubs.length > 0 ? (totalGrade / reflectedSubs.length).toFixed(2) : '-';
+  const wAvg = totalUnit > 0 ? (weightedTotal / totalUnit).toFixed(2) : '-';
+
+  const avgDisplay = document.getElementById('topNAvgDisplay');
+  if (avgDisplay) {
+    avgDisplay.innerHTML = avg !== '-' ? `${avg} <span style="font-size:1.4rem;font-weight:700">등급</span>` : '- 등급';
+  }
+  const avgSub = document.getElementById('topNAvgSub');
+  if (avgSub) {
+    avgSub.innerHTML = `반영 과목 총 <b>${totalCount}개</b> (일반선택 ${genCount}개 + 진로선택 ${carCount}개) · 이수단위 가중평균: <b>${wAvg !== '-' ? wAvg + '등급' : '-'}</b>`;
+  }
+
+  // 1. 반영된 과목 컨테이너
+  const refContainer = document.getElementById('reflectedContainer');
+  if (refContainer) {
+    if (!reflectedSubs.length) {
+      refContainer.innerHTML = '<div style="font-size:12px;color:var(--ink-3);text-align:center;width:100%;padding:14px 0">반영된 과목이 없습니다. 아래 미반영 과목에서 카드를 클릭하거나 [최적 조합 자동 반영]을 누르세요.</div>';
+    } else {
+      let html = '';
+      reflectedSubs.forEach(d => {
+        const typeClass = d.type === '일반' ? 'tag-gen' : 'tag-car';
+        const typeBadge = d.type === '일반' ? 'gen' : 'car';
+        const effG = getEffectiveGrade(d, convMap);
+        const gradeText = d.type === '일반' ? `${d.grade}등급` : `성취도 ${d.achieve} <span class="topn-tag-conv">(${effG}등급 환산)</span>`;
+        html += `
+          <div class="topn-tag ${typeClass}" onclick="toggleTopNSub('${d.id}', true)" title="클릭하여 반영에서 제외">
+            <div class="topn-tag-header">
+              <span class="topn-tag-type ${typeBadge}">${d.type}</span>
+              <span class="topn-tag-title">${d.subject}</span>
+            </div>
+            <div class="topn-tag-sem">${nsShortTerm(d.term)} · ${d.unit || 1}단위</div>
+            <div class="topn-tag-grade">${gradeText}</div>
+          </div>
+        `;
+      });
+      refContainer.innerHTML = html;
+    }
+  }
+
+  // 2. 미반영 과목 컨테이너 (학년별 그룹화 & 최고 등급 추천)
+  const unrefContainer = document.getElementById('unreflectedContainer');
+  if (unrefContainer) {
+    if (!unreflectedSubs.length) {
+      unrefContainer.innerHTML = '<div style="font-size:12px;color:var(--ink-3);text-align:center;width:100%;padding:14px 0">모든 과목이 반영되었습니다.</div>';
+    } else {
+      const bestSub = [...unreflectedSubs].sort((a, b) => getEffectiveGrade(a, convMap) - getEffectiveGrade(b, convMap))[0];
+
+      const groups = { '1학년': [], '2학년': [], '3학년': [] };
+      unreflectedSubs.forEach(d => {
+        const m = d.term.match(/^(\d)학년/);
+        const gKey = m ? m[1] + '학년' : '1학년';
+        if (!groups[gKey]) groups[gKey] = [];
+        groups[gKey].push(d);
+      });
+
+      let html = '';
+      Object.keys(groups).forEach(gKey => {
+        const list = groups[gKey];
+        if (!list || !list.length) return;
+        html += `<div class="topn-unref-group">
+          <div class="topn-unref-group-title">${gKey} 미반영 과목 (${list.length}개)</div>
+          <div class="topn-unref-group-items">`;
+        list.forEach(d => {
+          const typeClass = d.type === '일반' ? 'tag-gen' : 'tag-car';
+          const typeBadge = d.type === '일반' ? 'gen' : 'car';
+          const effG = getEffectiveGrade(d, convMap);
+          const isBest = (bestSub && d.id === bestSub.id);
+          const bestClass = isBest ? 'best' : '';
+          const bestBadge = isBest ? `<div class="topn-best-badge">추천</div>` : '';
+          const gradeText = d.type === '일반' ? `${d.grade}등급` : `성취도 ${d.achieve} <span class="topn-tag-conv">(${effG}등급 환산)</span>`;
+          html += `
+            <div class="topn-tag ${typeClass} ${bestClass}" onclick="toggleTopNSub('${d.id}', false)" title="클릭하여 반영에 추가">
+              ${bestBadge}
+              <div class="topn-tag-header">
+                <span class="topn-tag-type ${typeBadge}">${d.type}</span>
+                <span class="topn-tag-title">${d.subject}</span>
+              </div>
+              <div class="topn-tag-sem">${nsShortTerm(d.term)} · ${d.unit || 1}단위</div>
+              <div class="topn-tag-grade">${gradeText}</div>
+            </div>
+          `;
+        });
+        html += `</div></div>`;
+      });
+      unrefContainer.innerHTML = html;
+    }
+  }
 }
 
 // 등급 경계 아쉬운 과목 — 구조화 데이터 (엑셀·인쇄에서 열 단위로 재사용)
@@ -2111,6 +2497,18 @@ function buildPrompt(promptType) {
 
   p += `\n[과목별 성적 및 학기별 등급 추이]\n${gradeText || '등록된 내신 과목 성적이 없습니다.'}`;
   if (nmText) p += `\n[한 등급만 올리면 되는 경계선 과목 (추월 필요 인원 순)]\n${nmText}\n`;
+  if (topNData && topNData.length > 0 && reflectedSubs && reflectedSubs.length > 0) {
+    const convMap = getConvMap();
+    let totalG = 0;
+    reflectedSubs.forEach(d => { totalG += getEffectiveGrade(d, convMap); });
+    const topNAvg = (totalG / reflectedSubs.length).toFixed(2);
+    const genC = reflectedSubs.filter(d=>d.type==='일반').length;
+    const carC = reflectedSubs.filter(d=>d.type==='진로').length;
+    p += `\n[대학별 맞춤 상위 교과 환산 성적 (Top-${reflectedSubs.length})]\n`;
+    p += `• 반영 과목 수: 총 ${reflectedSubs.length}개 (일반선택 ${genC}개 + 진로선택 ${carC}개)\n`;
+    p += `• 상위 교과 환산 평균: ${topNAvg}등급\n`;
+    p += `• 반영 과목: ${reflectedSubs.map(d => `${d.subject}(${d.type==='일반'?d.grade+'등급':`성취도 ${d.achieve}→${convMap[d.achieve]}등급`})`).join(', ')}\n`;
+  }
   if (memo) p += `\n[담임교사 관찰 및 상담 메모]\n${memo}\n`;
   p += mkPromptData(currentStudent);
 
@@ -3085,6 +3483,7 @@ function scrollToPrompt() {
 function resetAll(silent) {
   if (!silent && !confirm('모든 데이터를 초기화할까요?')) return;
   allStudents = {}; currentStudent = null; checkedSubjects.clear(); currentNMGrade = '전체';
+  topNData = []; reflectedSubs = []; unreflectedSubs = [];
   ilamData = null; termGradeSystemMap = {};
   show9Grade = false;
   const c9t = document.getElementById('conv9-toggle');
@@ -8800,7 +9199,7 @@ function nsGapByAhead(nm, studentName, subjectKey) {
   // 원래 막대는 9등급 = 필요 점수, 5등급 = 원점수−평균으로 짐작한 %p라 순서와 어긋났다.
   nm.band = nsGapBand(pa);
   if (nm.band) {
-    const ptNeed = nm.system === '9등급' && typeof nm.gap === 'number' ? ' · ' + nm.gap.toFixed(1) + '점 필요' : '';
+    const ptNeed = (typeof nm.gap === 'number' && isFinite(nm.gap)) ? ' · ' + (nm.gap > 0 ? '+' : '') + nm.gap.toFixed(1) + '점 필요' : '';
     nm.gapLabel = '같은 등급 ' + nm.band.size + '명 중 앞 ' + (pa.estimated ? '약 ' : '') + ahead + '명' + ptNeed;
   }
   return nm;
