@@ -1122,6 +1122,61 @@ function checkAll(val) {
 }
 
 // ═══════════════════════════════════════════════
+// 섹션 퀵 점프 네비게이션 (Sticky Quick-Jump & Scrollspy)
+// ═══════════════════════════════════════════════
+function quickJumpTo(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const rbody = document.querySelector('.rbody');
+  const nav = document.getElementById('quick-nav-bar');
+  const navH = nav ? nav.offsetHeight + 14 : 52;
+
+  // PC: .rbody 내부 스크롤 / 모바일: window 스크롤
+  if (rbody && rbody.scrollHeight > rbody.clientHeight && window.getComputedStyle(rbody).overflowY === 'auto') {
+    const targetTop = el.offsetTop - navH;
+    rbody.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+  } else {
+    const rect = el.getBoundingClientRect();
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    window.scrollTo({ top: Math.max(0, scrollTop + rect.top - navH), behavior: 'smooth' });
+  }
+
+  document.querySelectorAll('.quick-nav-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.target === id);
+  });
+}
+
+function initQuickNavScrollspy() {
+  const rbody = document.querySelector('.rbody');
+  const targetIds = ['grade-table-card', 'near-miss-card', 'topn-card', 'chart-card', 'ns-combo-card', 'prompt-card'];
+
+  function onScroll() {
+    const nav = document.getElementById('quick-nav-bar');
+    if (!nav || nav.style.display === 'none') return;
+    const navH = nav.offsetHeight + 24;
+
+    let current = null;
+    for (const id of targetIds) {
+      const el = document.getElementById(id);
+      if (!el || el.style.display === 'none') continue;
+      const rect = el.getBoundingClientRect();
+      if (rect.top <= navH + 100 && rect.bottom > navH) {
+        current = id;
+        break;
+      }
+    }
+    if (current) {
+      document.querySelectorAll('.quick-nav-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.target === current);
+      });
+    }
+  }
+
+  if (rbody && typeof rbody.addEventListener === 'function') rbody.addEventListener('scroll', onScroll, { passive: true });
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') window.addEventListener('scroll', onScroll, { passive: true });
+}
+
+// ═══════════════════════════════════════════════
 // GENERATE ALL
 // ═══════════════════════════════════════════════
 function generateAll() {
@@ -1131,6 +1186,8 @@ function generateAll() {
 
   document.getElementById('empty-state').style.display = 'none';
   document.getElementById('result-area').style.display = 'block';
+  const qNav = document.getElementById('quick-nav-bar');
+  if (qNav) qNav.style.display = 'block';
   // 모바일 화면에서는 분석 버튼 클릭 시 결과 탭으로 즉시 자동 전환
   if (window.innerWidth <= 860) { switchMob('right'); }
 
@@ -11016,6 +11073,7 @@ function shellInit() {
   introInit();
   document.addEventListener('keydown', shellKeys);
   uiRefresh();
+  initQuickNavScrollspy();
 }
 
 /* ══════════════ ui/output.js ══════════════ */

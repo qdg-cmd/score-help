@@ -366,6 +366,18 @@
           <div class="mk-empty"><i data-ic="user" data-s="46"></i><div class="ti">학생을 고르면 내신 분석이 나옵니다</div><div class="ds">위쪽에서 학생을 고르고 <b>분석</b>을 누르거나, <b>상담 우선순위</b> 탭에서 이름을 누르세요.</div></div>
         </div>
 
+        <!-- 섹션 퀵 점프 네비게이션 (Sticky Quick-Jump Tabs) -->
+        <nav class="quick-nav-bar no-print" id="quick-nav-bar" style="display:none">
+          <div class="quick-nav-inner">
+            <button class="quick-nav-btn active" data-target="grade-table-card" onclick="quickJumpTo('grade-table-card')"><i data-ic="table"></i> 종합 성적표</button>
+            <button class="quick-nav-btn" data-target="near-miss-card" onclick="quickJumpTo('near-miss-card')"><i data-ic="target"></i> Near-Miss 분석</button>
+            <button class="quick-nav-btn" data-target="topn-card" onclick="quickJumpTo('topn-card')"><i data-ic="award"></i> Top-N 추천</button>
+            <button class="quick-nav-btn" data-target="chart-card" onclick="quickJumpTo('chart-card')"><i data-ic="trend"></i> 성적 추이 그래프</button>
+            <button class="quick-nav-btn" data-target="ns-combo-card" onclick="quickJumpTo('ns-combo-card')"><i data-ic="layers"></i> 반영 조합별</button>
+            <button class="quick-nav-btn" data-target="prompt-card" onclick="quickJumpTo('prompt-card')"><i data-ic="clipboard"></i> AI 상담 프롬프트</button>
+          </div>
+        </nav>
+
         <!-- KPI Summary Card -->
         <div class="result-card" id="summary-card">
           <div class="result-title"><i data-ic="user"></i> 학생 요약 &amp; 5등급 핵심 지표 (KPI)</div>
@@ -379,7 +391,7 @@
         </div>
 
         <!-- 1. 5등급 교과 종합 성적표 -->
-        <div class="result-card print-split">
+        <div class="result-card print-split" id="grade-table-card">
           <div class="result-title">
             <i data-ic="table"></i> 1. 5등급 교과 종합 성적표 <span class="badge-5g">2028 개편 5등급제</span>
             <span class="conv9-toggle" id="conv9-toggle" style="display:none!important"></span>

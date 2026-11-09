@@ -438,6 +438,65 @@ body.warm .tagbadge.mid{border-color:#b3c9ac}
 .card-sub{font-size:11.5px;color:var(--ink-3);line-height:1.65;margin-bottom:12px}
 .dual-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px;align-items:start}
 .dual-row>.result-card{height:100%;margin-bottom:0}
+
+/* ── 섹션 퀵 점프 네비게이션 (Sticky Quick-Jump Tabs) ── */
+.quick-nav-bar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  margin-bottom: 14px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+}
+body.dark .quick-nav-bar {
+  background: rgba(24, 29, 39, 0.94);
+  border-color: var(--line);
+}
+.quick-nav-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.quick-nav-inner::-webkit-scrollbar {
+  display: none;
+}
+.quick-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.18s ease;
+}
+.quick-nav-btn:hover {
+  background: var(--paper-2);
+  color: var(--ink);
+}
+.quick-nav-btn.active {
+  background: var(--good);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3);
+}
+body.dark .quick-nav-btn.active {
+  background: var(--good);
+  color: #ffffff;
+}
 /* ── Near-Miss 개선 그리드 & 카드 ── */
 .nm-grid {
   display: grid;
