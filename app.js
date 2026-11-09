@@ -639,6 +639,9 @@ function applyParseResult(students, isIlam) {
   document.getElementById('batch-count').textContent = names.length + '명';
   nsAfterMerge(); stuNoCapture(); mkStoreTouch(); uiRefresh(); // MOCK · NS
   nsMergeToast(names.length);
+  if (names.length > 0) {
+    autoPickFirstStudent();
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -1136,25 +1139,34 @@ function onStudentChange() {
   grid.innerHTML = '';
 
   // Collect unique subjects with term order (일반교과 + 진로선택 성취도 전용 과목)
-  const subjMap = {}; // subject -> [terms]
+  const subjMap = {}; // subject -> { terms: [], isCareer: false }
   Object.values(data).forEach(d => {
-    if (!subjMap[d.subject]) subjMap[d.subject] = [];
-    if (!subjMap[d.subject].includes(d.term)) subjMap[d.subject].push(d.term);
+    if (!subjMap[d.subject]) subjMap[d.subject] = { terms: [], isCareer: (d.type === '진로') };
+    if (!subjMap[d.subject].terms.includes(d.term)) subjMap[d.subject].terms.push(d.term);
+    if (d.type === '진로') subjMap[d.subject].isCareer = true;
   });
   const ao = (typeof nsAchOnly !== 'undefined' && nsAchOnly && nsAchOnly[name]) || [];
   ao.forEach(d => {
     if (d && d.subject) {
-      if (!subjMap[d.subject]) subjMap[d.subject] = [];
-      if (d.term && !subjMap[d.subject].includes(d.term)) subjMap[d.subject].push(d.term);
+      if (!subjMap[d.subject]) subjMap[d.subject] = { terms: [], isCareer: true };
+      if (d.term && !subjMap[d.subject].terms.includes(d.term)) subjMap[d.subject].terms.push(d.term);
+      subjMap[d.subject].isCareer = true;
     }
   });
 
-  Object.keys(subjMap).forEach(subj => {
+  const makeChipHtml = (subj, isChecked, isCareer) => {
+    const ico = isChecked ? '<span class="ico" style="font-size:9px">✓</span> ' : '';
+    const badge = isCareer ? '<span style="font-size:9.5px;padding:1px 5px;border-radius:4px;background:#e0e7ff;color:#3730a3;font-weight:700;margin-right:4px">진로</span>' : '';
+    return `${ico}${badge}${subj}`;
+  };
+
+  Object.entries(subjMap).forEach(([subj, info]) => {
     checkedSubjects.add(subj);
     const chip = document.createElement('div');
-    chip.className = 'subj-chip checked';
+    chip.className = 'subj-chip checked' + (info.isCareer ? ' subj-chip-career' : '');
     chip.dataset.subj = subj;
-    chip.innerHTML = `<span class="ico" style="font-size:9px">✓</span> ${subj}`;
+    chip.dataset.career = info.isCareer ? '1' : '0';
+    chip.innerHTML = makeChipHtml(subj, true, info.isCareer);
     chip.onclick = () => toggleSubj(chip, subj);
     grid.appendChild(chip);
   });
@@ -1162,26 +1174,38 @@ function onStudentChange() {
   document.getElementById('s2').classList.remove('collapsed');
   document.getElementById('s3').classList.remove('collapsed');
   document.getElementById('stu-info').style.display = 'block';
-  document.getElementById('stu-info').textContent = `이수 과목 ${Object.keys(subjMap).length}개`;
+  const careerCount = Object.values(subjMap).filter(x => x.isCareer).length;
+  document.getElementById('stu-info').textContent = `이수 과목 ${Object.keys(subjMap).length}개 (일반 ${Object.keys(subjMap).length - careerCount} · 진로 ${careerCount})`;
 }
 
 function toggleSubj(chip, subj) {
+  const isCareer = chip.dataset.career === '1';
+  const badge = isCareer ? '<span style="font-size:9.5px;padding:1px 5px;border-radius:4px;background:#e0e7ff;color:#3730a3;font-weight:700;margin-right:4px">진로</span>' : '';
   if (checkedSubjects.has(subj)) {
     checkedSubjects.delete(subj);
     chip.classList.remove('checked');
-    chip.innerHTML = `${subj}`;
+    chip.innerHTML = `${badge}${subj}`;
   } else {
     checkedSubjects.add(subj);
     chip.classList.add('checked');
-    chip.innerHTML = `<span class="ico" style="font-size:9px">✓</span> ${subj}`;
+    chip.innerHTML = `<span class="ico" style="font-size:9px">✓</span> ${badge}${subj}`;
   }
 }
 
 function checkAll(val) {
   document.querySelectorAll('.subj-chip').forEach(chip => {
     const subj = chip.dataset.subj;
-    if (val) { checkedSubjects.add(subj); chip.classList.add('checked'); chip.innerHTML = `<span class="ico" style="font-size:9px">✓</span> ${subj}`; }
-    else { checkedSubjects.delete(subj); chip.classList.remove('checked'); chip.innerHTML = subj; }
+    const isCareer = chip.dataset.career === '1';
+    const badge = isCareer ? '<span style="font-size:9.5px;padding:1px 5px;border-radius:4px;background:#e0e7ff;color:#3730a3;font-weight:700;margin-right:4px">진로</span>' : '';
+    if (val) {
+      checkedSubjects.add(subj);
+      chip.classList.add('checked');
+      chip.innerHTML = `<span class="ico" style="font-size:9px">✓</span> ${badge}${subj}`;
+    } else {
+      checkedSubjects.delete(subj);
+      chip.classList.remove('checked');
+      chip.innerHTML = `${badge}${subj}`;
+    }
   });
 }
 
@@ -1657,7 +1681,7 @@ function buildTable() {
           if (dec) gradeLabel = dec.value.toFixed(2) + '등급' + (dec.precise ? '' : '<span style="opacity:.6">(추정)</span>');
         } else {
           cls = d.achieve === 'P' ? 'g-pass' : 'g-career';
-          gradeLabel = d.achieve === 'P' ? 'P (이수)' : (d.achieve ? `성취도 ${d.achieve}` : '진로선택');
+          gradeLabel = d.achieve === 'P' ? 'P (이수)' : (d.achieve ? `진로 · 성취도 ${d.achieve}` : '진로선택');
         }
         let extraInfo = '';
         if (d.isIlam && d.rank) {
@@ -8451,6 +8475,17 @@ function mkStoreLoad(announce) {
   // 2. 내신 복원
   try {
     if (p.naesin && p.naesin.students && typeof p.naesin.students === 'object') {
+      // 구버전 캐시 감지: 학생들의 과목 수가 40개 미만(진로과목 누락 구버전 데이터)이거나 진로과목이 전혀 없는 경우
+      const sampleStu = Object.values(p.naesin.students)[0];
+      const sampleCount = sampleStu ? Object.keys(sampleStu).length : 0;
+      const sampleHasCareer = sampleStu ? Object.values(sampleStu).some(d => d.type === '진로') : false;
+      const sampleHasAch = (p.naesin.achOnly && Object.keys(p.naesin.achOnly).length > 0);
+      if (sampleCount > 0 && sampleCount < 40 && !sampleHasCareer && !sampleHasAch) {
+        console.warn('[mkStore] 구버전 캐시 감지(진로과목 누락). 캐시를 자동 초기화합니다.');
+        try { localStorage.removeItem(MK_STORE_KEY); } catch (e) {}
+        return false;
+      }
+
       currentFileType = p.naesin.fileType || 'neis';
       currentSchoolLevel = 'high';
       ilamData = p.naesin.ilamData || null;
@@ -11830,8 +11865,21 @@ motionInit();   // 저장분을 다 불러온 뒤에 감싼다 — 시작할 때
 // ===============================================
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
-    navigator.serviceWorker.register('./sw.js').then(function(reg) {
+    navigator.serviceWorker.register('./sw.js?v=20261109_v7').then(function(reg) {
       console.log('[PWA] ServiceWorker registered with scope:', reg.scope);
+      // 새 서비스워커 감지 시 즉시 업데이트 적용
+      reg.update();
+      reg.onupdatefound = function() {
+        const installingWorker = reg.installing;
+        if (installingWorker) {
+          installingWorker.onstatechange = function() {
+            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              console.log('[PWA] New version installed, auto refreshing...');
+              window.location.reload();
+            }
+          };
+        }
+      };
     }).catch(function(err) {
       console.warn('[PWA] ServiceWorker registration failed:', err);
     });
