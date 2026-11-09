@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#27272a"/>
+      <stop offset="100%" stop-color="#18181b"/>
+    </linearGradient>
+    <linearGradient id="lensGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#f4f4f5" stop-opacity="0.8"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Background Rounded App Square (Achromatic Zinc) -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+
+  <!-- Subtle Circular Tech Radar Ring -->
+  <circle cx="230" cy="230" r="160" fill="none" stroke="#71717a" stroke-width="2.5" stroke-dasharray="8 8" opacity="0.3"/>
+  <circle cx="230" cy="230" r="110" fill="none" stroke="#a1a1aa" stroke-width="2" opacity="0.25"/>
+
+  <!-- Magnifying Glass Lens Frame -->
+  <g filter="url(#shadow)">
+    <!-- Lens Handle -->
+    <path d="M336 336 L440 440" stroke="#ffffff" stroke-width="44" stroke-linecap="round"/>
+    <path d="M336 336 L440 440" stroke="#d4d4d8" stroke-width="24" stroke-linecap="round"/>
+
+    <!-- Lens Outer Ring -->
+    <circle cx="230" cy="230" r="130" fill="url(#lensGrad)" stroke="#ffffff" stroke-width="28"/>
+  </g>
+
+  <!-- Grade Growth Trend Chart inside Lens -->
+  <g>
+    <!-- Grid baseline -->
+    <line x1="150" y1="290" x2="310" y2="290" stroke="#a1a1aa" stroke-width="4" stroke-linecap="round" opacity="0.5"/>
+
+    <!-- Trend Area Fill -->
+    <path d="M165 260 L210 230 L255 245 L300 170 L300 290 L165 290 Z" fill="#71717a" opacity="0.2"/>
+
+    <!-- Trend Line (Ascending to 1st Grade) -->
+    <path d="M165 260 L210 230 L255 245 L300 170" fill="none" stroke="#18181b" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Data Points -->
+    <circle cx="165" cy="260" r="9" fill="#27272a"/>
+    <circle cx="210" cy="230" r="9" fill="#27272a"/>
+    <circle cx="255" cy="245" r="9" fill="#27272a"/>
+    <circle cx="300" cy="170" r="13" fill="#18181b" stroke="#ffffff" stroke-width="4"/>
+  </g>
+
+  <!-- Star of Excellence at Top Right of Lens -->
+  <path d="M300 135 L306 148 L320 150 L310 160 L312 174 L300 167 L288 174 L290 160 L280 150 L294 148 Z" fill="#e4e4e7" stroke="#71717a" stroke-width="2"/>
+</svg>

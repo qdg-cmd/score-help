@@ -1,0 +1,21 @@
+{
+  "id": "score-compass-5",
+  "name": "고교 성적 나침반 5.0 — 2028 대입 개편 5등급제 성적 분석 및 진학 상담",
+  "short_name": "성적나침반 5.0",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#18181b",
+  "theme_color": "#18181b",
+  "description": "NEIS 교과학습발달상황 및 전과목 성적 일람표 분석, 2028 개편 5등급제 심층 분석, 추월 가능(Near-Miss) 과목, AI 학생·학부모 상담 프롬프트 자동 생성 오프라인 PWA",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education", "productivity"]
+}
