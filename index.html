@@ -59,7 +59,7 @@
 <script defer src="./lib/pdf.worker.min.js"></script>
 
 <!-- Main Application Stylesheet -->
-<link rel="stylesheet" href="./style.css?v=20261109_v9">
+<link rel="stylesheet" href="./style.css?v=20261109_v10">
 </head>
 <body>
 
@@ -373,7 +373,7 @@
         <nav class="quick-nav-bar no-print" id="quick-nav-bar" style="display:none">
           <div class="quick-nav-inner">
             <button class="quick-nav-btn active" data-target="grade-table-card" onclick="quickJumpTo('grade-table-card')"><i data-ic="table"></i> 종합 성적표</button>
-            <button class="quick-nav-btn" data-target="near-miss-card" onclick="quickJumpTo('near-miss-card')"><i data-ic="target"></i> Near-Miss 분석</button>
+            <button class="quick-nav-btn" data-target="near-miss-card" onclick="quickJumpTo('near-miss-card')"><i data-ic="target"></i> <span id="qnav-nm-btn">5등급 위치 분석</span></button>
             <button class="quick-nav-btn" data-target="topn-card" onclick="quickJumpTo('topn-card')"><i data-ic="award"></i> Top-N 추천</button>
             <button class="quick-nav-btn" data-target="chart-card" onclick="quickJumpTo('chart-card')"><i data-ic="trend"></i> 성적 추이 그래프</button>
             <button class="quick-nav-btn" data-target="ns-combo-card" onclick="quickJumpTo('ns-combo-card')"><i data-ic="layers"></i> 반영 조합별</button>
@@ -404,10 +404,10 @@
           <div id="grade-table-wrap" style="margin-top:10px"></div>
         </div>
 
-        <!-- 2. 5등급 위치 및 추월 가능 과목 (Near-Miss) -->
+        <!-- 2. 5등급 과목별 위치 및 성취도 분석 -->
         <div class="result-card print-split" id="near-miss-card">
-          <div class="result-title"><i data-ic="target"></i> 2. 5등급 위치 및 추월 가능 과목 (Near-Miss) <span class="badge-5g">목표 시뮬레이션</span></div>
-          <div class="card-sub">상위 등급 경계선에 근접한 과목 및 학업역량 분석입니다. <b>1차 시험(진행중)</b>은 기말 역전 목표를, <b>생기부 확정 성적</b>은 Z점수·백분위 심층 진단을 제공합니다.</div>
+          <div class="result-title"><i data-ic="target"></i> <span id="nm-card-title">2. 5등급 과목별 위치 및 성취도 분석</span> <span class="badge-5g" id="nm-badge-title">성적 위치 진단</span></div>
+          <div class="card-sub" id="nm-card-sub">생기부 확정 과목의 5등급 내 정밀 위치, Z점수 및 상위 누적 백분위를 분석합니다. (진행 중인 1차 지필평가는 기말 역전 목표 제공)</div>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
             <span style="font-size:11.5px;font-weight:700;color:var(--ink-3)">학년</span>
             <div id="nm-grade-tabs" style="display:flex;gap:4px;flex-wrap:wrap"></div>
@@ -787,7 +787,7 @@
     </div>
   </div>
 </div>
-<script defer src="./app.js?v=20261109_v9"></script>
+<script defer src="./app.js?v=20261109_v10"></script>
 
 </body>
 </html>
