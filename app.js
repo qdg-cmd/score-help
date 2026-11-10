@@ -1228,9 +1228,15 @@ function quickJumpTo(id) {
   const el = document.getElementById(id);
   if (!el) return;
 
-  // 1. 클릭된 탭 즉시 활성화
+  // 1. 클릭된 탭 즉시 활성화 및 퀵바 내부 가로 스크롤 정렬
   document.querySelectorAll('.quick-nav-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.target === id);
+    const isActive = (btn.dataset.target === id);
+    btn.classList.toggle('active', isActive);
+    if (isActive) {
+      try {
+        btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      } catch (e) {}
+    }
   });
 
   // 2. 부드러운 스크롤 도중 스크롤스파이가 이전 탭으로 되돌리지 못하도록 락 설정 (850ms)
@@ -1239,11 +1245,12 @@ function quickJumpTo(id) {
   scrollLockTimer = setTimeout(() => { isClickScrolling = false; }, 850);
 
   // 3. 네비게이션 바 높이를 고려한 정밀 스크롤 이동
+  const isMobile = window.innerWidth <= 860;
   const nav = document.getElementById('quick-nav-bar');
-  const navH = nav ? nav.offsetHeight + 14 : 54;
+  const navH = isMobile ? 60 : (nav ? nav.offsetHeight + 14 : 54);
   const rbody = document.querySelector('.rbody');
 
-  if (rbody && rbody.scrollHeight > rbody.clientHeight && window.getComputedStyle(rbody).overflowY === 'auto') {
+  if (!isMobile && rbody && rbody.scrollHeight > rbody.clientHeight && window.getComputedStyle(rbody).overflowY === 'auto') {
     const rbodyRect = rbody.getBoundingClientRect();
     const elRect = el.getBoundingClientRect();
     const targetScroll = rbody.scrollTop + (elRect.top - rbodyRect.top) - navH;
@@ -1264,8 +1271,9 @@ function initQuickNavScrollspy() {
 
     const nav = document.getElementById('quick-nav-bar');
     if (!nav || nav.style.display === 'none') return;
+    const isMobile = window.innerWidth <= 860;
     const navH = nav.offsetHeight || 44;
-    const triggerLine = navH + 50;
+    const triggerLine = isMobile ? 110 : (navH + 50);
 
     let current = null;
     // 위에서부터 순서대로 검사: 트리거 라인 위로 올라온 마지막 섹션이 현재 활성 섹션 (밀림 버그 원천 해결)
@@ -1279,7 +1287,7 @@ function initQuickNavScrollspy() {
     }
 
     // 만약 페이지 맨 아래에 도달했을 경우 마지막으로 표시 중인 섹션 활성화
-    const scrollContainer = (rbody && rbody.scrollHeight > rbody.clientHeight && window.getComputedStyle(rbody).overflowY === 'auto') ? rbody : null;
+    const scrollContainer = (!isMobile && rbody && rbody.scrollHeight > rbody.clientHeight && window.getComputedStyle(rbody).overflowY === 'auto') ? rbody : null;
     const isAtBottom = scrollContainer 
       ? (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 35)
       : ((window.innerHeight + (window.pageYOffset || document.documentElement.scrollTop)) >= document.documentElement.scrollHeight - 35);
@@ -1296,7 +1304,13 @@ function initQuickNavScrollspy() {
 
     if (current) {
       document.querySelectorAll('.quick-nav-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.target === current);
+        const isActive = (btn.dataset.target === current);
+        btn.classList.toggle('active', isActive);
+        if (isActive && isMobile && !isClickScrolling) {
+          try {
+            btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+          } catch (e) {}
+        }
       });
     }
   }
@@ -11981,7 +11995,7 @@ motionInit();   // 저장분을 다 불러온 뒤에 감싼다 — 시작할 때
 // ===============================================
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
-    navigator.serviceWorker.register('./sw.js?v=20261110_v13').then(function(reg) {
+    navigator.serviceWorker.register('./sw.js?v=20261110_v14').then(function(reg) {
       console.log('[PWA] ServiceWorker registered with scope:', reg.scope);
       // 새 서비스워커 감지 시 즉시 업데이트 적용
       reg.update();
