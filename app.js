@@ -1791,19 +1791,19 @@ const CATEGORY_MAP = [
     ]
   },
   {
-    name: '제2외국어', color: '#f97316',
-    keywords: [
-      '중국어','일본어','러시아어','아랍어','베트남어','프랑스어','독일어',
-      '스페인어','한문','고전그리스어','라틴어',
-    ]
-  },
-  {
     name: '예체능·기타', color: '#94a3b8',
     keywords: [
       '체육','운동','스포츠','보건',
       '음악','미술','연극','영화','무용','사진','공예',
       '기술','가정','정보','인공지능','SW','소프트웨어',
       '진로','직업','창의','논술','실용',
+    ]
+  },
+  {
+    name: '제2외국어', color: '#f97316',
+    keywords: [
+      '중국어','일본어','러시아어','아랍어','베트남어','프랑스어','독일어',
+      '스페인어','한문','고전그리스어','라틴어',
     ]
   },
 ];
@@ -1848,8 +1848,13 @@ function buildChart() {
     categoryGroups[cat].push(subj);
   });
 
-  // 탭: 전체과목 + 실제 계열들
-  const cats = ['전체과목', ...Object.keys(categoryGroups)];
+  // 탭: 전체과목 + 지정된 계열 순서 (국어, 수학, 영어, 사회, 과학, 예체능, 제2외국어)
+  const catOrder = CATEGORY_MAP.map(c => c.name);
+  const cats = ['전체과목', ...Object.keys(categoryGroups)].sort((a, b) => {
+    const idxA = catOrder.indexOf(a);
+    const idxB = catOrder.indexOf(b);
+    return (idxA !== -1 ? idxA : 999) - (idxB !== -1 ? idxB : 999);
+  });
   if (!currentChartCategory || !cats.includes(currentChartCategory)) {
     currentChartCategory = '전체과목';
   }
@@ -12001,7 +12006,7 @@ motionInit();   // 저장분을 다 불러온 뒤에 감싼다 — 시작할 때
 // ===============================================
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
-    navigator.serviceWorker.register('./sw.js?v=20261110_v15').then(function(reg) {
+    navigator.serviceWorker.register('./sw.js?v=20261110_v16').then(function(reg) {
       console.log('[PWA] ServiceWorker registered with scope:', reg.scope);
       // 새 서비스워커 감지 시 즉시 업데이트 적용
       reg.update();
