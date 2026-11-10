@@ -1962,6 +1962,9 @@ function buildChart() {
     }
   }
 
+  // 모든 데이터셋 클리핑 방지 (1등급 상단 점 잘림 원천 차단)
+  datasets.forEach(d => { d.clip = false; });
+
   if (trendChart) trendChart.destroy();
   const ctx = document.getElementById('trend-chart').getContext('2d');
   const isMidMode = currentSchoolLevel === 'middle';
@@ -1971,13 +1974,14 @@ function buildChart() {
     data: { labels: nsProvLabels(allUsedTerms, nsProvTerms(data)), datasets }, // NS
     options: {
       responsive: true, maintainAspectRatio: false,
+      clip: false,
       layout: {
-        padding: { top: 14, bottom: 8, left: 4, right: 12 }
+        padding: { top: 16, bottom: 8, left: 4, right: 12 }
       },
       scales: {
         y: {
-          reverse: true, min: 0.8, max: gradeSystemMax + 0.15,
-          ticks: { stepSize: 1,
+          reverse: true, min: 1, max: gradeSystemMax,
+          ticks: { stepSize: 1, autoSkip: false,
             callback: v => {
               if (v < 1 || v > gradeSystemMax || !Number.isInteger(v)) return '';
               return isMidMode ? achMap[v] : v+'등급';
@@ -9456,15 +9460,17 @@ function nsComboConfig(ts, key, forPrint) {
   // 조합 평균은 서로 가깝게 붙어 있다. 1~9 전체로 그리면 선이 평평해 보이므로 이 학생 범위로 좁힌다.
   const all = datasets.flatMap(d => d.data).filter(v => v !== null);
   if (!all.length) return null;
-  const yMin = Math.max(0.8, Math.floor(Math.min.apply(null, all) * 2) / 2 - 0.5);
-  const yMax = Math.min(gm + 0.15, Math.ceil(Math.max.apply(null, all) * 2) / 2 + 0.5);
+  const yMin = Math.max(1, Math.floor(Math.min.apply(null, all) * 2) / 2 - 0.5);
+  const yMax = Math.min(gm, Math.ceil(Math.max.apply(null, all) * 2) / 2 + 0.5);
   const fs = forPrint ? 13 : 11;
+  datasets.forEach(d => { d.clip = false; });
   return {
     type: 'line',
     data: { labels: nsProvLabels(ts.terms, provSet), datasets: datasets },
     options: {
       responsive: !forPrint, maintainAspectRatio: false, animation: forPrint ? false : undefined,
-      layout: { padding: { top: 12, bottom: 6, left: 4, right: 10 } },
+      clip: false,
+      layout: { padding: { top: 14, bottom: 8, left: 4, right: 10 } },
       scales: {
         y: {
           reverse: true, min: yMin, max: yMax,
@@ -11995,7 +12001,7 @@ motionInit();   // 저장분을 다 불러온 뒤에 감싼다 — 시작할 때
 // ===============================================
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
-    navigator.serviceWorker.register('./sw.js?v=20261110_v14').then(function(reg) {
+    navigator.serviceWorker.register('./sw.js?v=20261110_v15').then(function(reg) {
       console.log('[PWA] ServiceWorker registered with scope:', reg.scope);
       // 새 서비스워커 감지 시 즉시 업데이트 적용
       reg.update();
