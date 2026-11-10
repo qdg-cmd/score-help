@@ -63,7 +63,7 @@ body.warm{
 
 /* ── 리셋 ───────────────────────────────────────────────────── */
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%}
+html,body{height:100%;max-width:100vw;overflow-x:hidden}
 body{
   font-family:var(--ff); font-size:14px; line-height:1.55;
   color:var(--ink); background:var(--paper-2);
@@ -1643,55 +1643,70 @@ body.warm .mk-store-del{border-top-color:#b3c9ac}
 
 /* ── (1) 표준 모바일 및 폴더블 (< 860px) ── */
 @media(max-width:860px){
-  html,body{overflow:auto}
+  html,body{overflow-x:hidden!important;width:100%!important;max-width:100vw!important;height:auto!important}
   body{height:auto}
-  .tagline{display:none}
-  .mob-tabs{display:flex}
-  .main{flex-direction:column;overflow:visible}
-  .lp,.rp{width:100%!important;border-right:none}
+  .tagline{display:none!important}
+
+  /* 헤더 모바일 최적화 (가로 폭 초과 및 튀어나감 완전 방지) */
+  .hdr{
+    padding:0 12px;gap:8px;height:52px;justify-content:space-between;
+    width:100%;max-width:100vw;box-sizing:border-box;overflow-x:hidden;
+  }
+  .brand{min-width:0;flex:1 1 auto;gap:6px}
+  .brand .name{font-size:15px;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .brand .ver{display:none!important}
+  .brand .logo-mark svg{width:24px;height:24px}
+  .hdr-acts{flex-shrink:0;gap:6px}
+  .hdr-acts .btn{width:36px;height:36px;padding:0;border-radius:var(--md-shape-full);justify-content:center}
+  .hdr-acts .btn span.lb{display:none!important}
+  .hdr-acts .icon-btn{width:36px;height:36px}
+
+  .mob-tabs{display:flex;width:100%;max-width:100vw;box-sizing:border-box}
+  .main{flex-direction:column;overflow-x:hidden;width:100%;max-width:100vw;box-sizing:border-box}
+  .lp,.rp{width:100%!important;max-width:100vw!important;box-sizing:border-box;border-right:none;overflow-x:hidden}
   .lp{border-bottom:1px solid var(--line);padding:14px 14px 28px}
-  body.rail .lp{width:100%;padding:14px 14px 28px}
+  body.rail .lp{width:100%!important;padding:14px 14px 28px}
   body.rail .lp>*:not(.railbar){display:block}
   .railbar{display:none!important}
-  .lp.mh,.rp.mh{display:none}
-  .rbody{overflow:visible;padding:14px 14px 48px}
-  .topbar{flex-wrap:wrap;height:auto;padding:10px 14px;gap:8px;background:var(--paper);border-bottom:1px solid var(--line)}
+  .lp.mh,.rp.mh{display:none!important}
+  .rbody{overflow-x:hidden;overflow-y:visible;padding:14px 12px 48px;width:100%;max-width:100vw;box-sizing:border-box}
+  .topbar{flex-wrap:wrap;height:auto;padding:10px 12px;gap:8px;background:var(--paper);border-bottom:1px solid var(--line);width:100%;max-width:100vw;box-sizing:border-box}
   .topbar .tb-collapse{display:none}
-  .topbar .tb-stu select{min-height:42px;font-size:13.5px}
-  .topbar > .act-btn.pri{min-height:42px;padding:0 18px;font-size:13.5px;border-radius:var(--md-shape-full)}
-  .rtabs{order:3;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:4px;padding:4px}
+  .topbar .tb-stu{width:100%;max-width:100%}
+  .topbar .tb-stu select{width:100%;max-width:none;min-height:42px;font-size:13.5px}
+  .topbar > .act-btn.pri{width:100%;min-height:42px;padding:0 18px;font-size:13.5px;border-radius:var(--md-shape-full);justify-content:center}
+  .rtabs{order:3;width:100%;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:4px;padding:4px;box-sizing:border-box}
   .rtabs::-webkit-scrollbar{display:none}
-  .rtab{padding:0 14px;min-height:38px;font-size:12.5px;border-radius:var(--md-shape-full)}
+  .rtab{padding:0 12px;min-height:38px;font-size:12px;border-radius:var(--md-shape-full);flex-shrink:0}
   .tb-out{order:4;width:100%;display:flex;gap:6px}
-  .tb-out .btn,.tb-out .act-btn{flex:1;min-height:40px;justify-content:center;border-radius:var(--md-shape-s)}
+  .tb-out .btn,.tb-out .act-btn{flex:1;min-height:40px;justify-content:center;border-radius:var(--md-shape-s);font-size:12px}
   .tb-out .lb{display:inline!important}
   .dual-row{grid-template-columns:1fr;gap:12px}
-  .tbl-wrap,.grade-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .tbl-wrap,.grade-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;box-sizing:border-box}
+  .quick-nav-bar{max-width:100%;box-sizing:border-box;border-radius:14px}
+  .result-card,.prompt-card{padding:14px 12px;box-sizing:border-box;max-width:100%}
 }
 
 /* ── (2) 5.5인치 소형 폰 & 갤럭시 폴드4 커버 스크린 (가로 <= 380px, 초슬림 화면) ── */
 @media(max-width:380px){
-  .hdr{padding:0 10px;gap:6px;height:52px}
-  .brand .name{font-size:15px;letter-spacing:-.01em}
-  .brand .logo-mark svg{width:24px;height:24px}
-  .hdr-acts .btn{width:36px;height:36px;padding:0;border-radius:var(--md-shape-full)}
-  .hdr-acts .btn span.lb{display:none!important}
-  .topbar{padding:8px 10px;gap:6px}
-  .topbar .tb-stu{width:100%;order:1}
-  .topbar .tb-stu select{width:100%;max-width:none;min-height:44px}
-  .topbar > .act-btn.pri{width:100%;order:2;min-height:44px;font-size:14px;justify-content:center}
-  .rtabs{order:3;width:100%;padding:3px}
-  .rtab{padding:0 10px;min-height:36px;font-size:12px}
-  .tb-out{order:4;width:100%;display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
-  .tb-out .btn,.tb-out .act-btn{min-height:38px;font-size:12px;padding:0 4px}
-  .result-card{padding:12px 10px;border-radius:10px;margin-bottom:10px}
-  .result-title{font-size:13.5px}
-  .card-sub{font-size:11px;margin-bottom:8px;line-height:1.55}
+  .hdr{padding:0 8px;gap:4px;height:48px}
+  .brand .name{font-size:14px}
+  .brand .logo-mark svg{width:22px;height:22px}
+  .hdr-acts .btn,.hdr-acts .icon-btn{width:32px;height:32px}
+  .topbar{padding:8px 8px;gap:6px}
+  .topbar .tb-stu select{min-height:40px}
+  .topbar > .act-btn.pri{min-height:40px;font-size:13px}
+  .rtab{padding:0 8px;min-height:34px;font-size:11px}
+  .tb-out{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+  .tb-out .btn,.tb-out .act-btn{min-height:36px;font-size:11px;padding:0 2px}
+  .result-card{padding:12px 8px;border-radius:10px;margin-bottom:10px}
+  .result-title{font-size:13px}
+  .card-sub{font-size:10.5px;margin-bottom:8px;line-height:1.5}
   .chiprow{gap:4px}
-  .slchip,.fchip,.ptchip{font-size:11px;padding:6px 9px;min-height:40px}
+  .slchip,.fchip,.ptchip{font-size:10.5px;padding:5px 7px;min-height:36px}
   .nm-grid{grid-template-columns:1fr}
   .batch-btns{grid-template-columns:1fr;gap:6px}
-  .batch-btn{min-height:46px}
+  .batch-btn{min-height:42px}
 }
 
 /* ── (3) 14.1인치 대화면 태블릿 & 와이드 스크린 (>= 861px) ── */

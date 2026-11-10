@@ -6,7 +6,7 @@
    필수 앱 셸을 캐싱합니다.
    ═══════════════════════════════════════════════════════════════ */
 
-const CACHE_NAME = 'score-compass-v5-10';
+const CACHE_NAME = 'score-compass-v5-11';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
