@@ -11977,7 +11977,7 @@ motionInit();   // 저장분을 다 불러온 뒤에 감싼다 — 시작할 때
 // ===============================================
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
-    navigator.serviceWorker.register('./sw.js?v=20261110_v11').then(function(reg) {
+    navigator.serviceWorker.register('./sw.js?v=20261110_v12').then(function(reg) {
       console.log('[PWA] ServiceWorker registered with scope:', reg.scope);
       // 새 서비스워커 감지 시 즉시 업데이트 적용
       reg.update();
